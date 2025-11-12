@@ -64,14 +64,24 @@ jobs:
             sed -i "s|PLACEHOLDER_ENCRYPTION_KEY|${{ secrets.ENCRYPTION_MASTER_KEY }}|g" HBDrop.WebApp/appsettings.json
             sed -i "s|PLACEHOLDER_GIPHY_KEY|${{ secrets.GIPHY_API_KEY }}|g" HBDrop.WebApp/appsettings.json
             
-            echo "Stopping existing containers..."
-            docker-compose down
-            
             echo "Building new images..."
-            docker-compose build --no-cache
+            docker-compose build --no-cache webapp
             
-            echo "Starting containers..."
-            docker-compose up -d
+            echo "Performing rolling update (zero downtime)..."
+            docker-compose up -d --no-deps webapp
+            
+            echo "Waiting for webapp to be healthy..."
+            timeout=60
+            elapsed=0
+            while [ $elapsed -lt $timeout ]; do
+              if docker-compose ps webapp | grep -q "healthy"; then
+                echo "Webapp is healthy!"
+                break
+              fi
+              echo "Waiting for webapp to become healthy... ($elapsed/$timeout seconds)"
+              sleep 5
+              elapsed=$((elapsed + 5))
+            done
             
             echo "Cleaning up old images..."
             docker image prune -f
