@@ -60,6 +60,24 @@ jobs:
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           ENVEOF
             
+            echo "Creating production appsettings override..."
+            cat > HBDrop.WebApp/appsettings.Production.json << 'APPSETTINGSEOF'
+          {
+            "ConnectionStrings": {
+              "DefaultConnection": "Host=postgres;Port=5432;Database=hbdrop;Username=hbdrop_user;Password=${{ secrets.POSTGRES_PASSWORD }}"
+            },
+            "Encryption": {
+              "MasterKey": "${{ secrets.ENCRYPTION_MASTER_KEY }}"
+            },
+            "Baileys": {
+              "ApiUrl": "http://baileys:3000"
+            },
+            "Giphy": {
+              "ApiKey": "${{ secrets.GIPHY_API_KEY }}"
+            }
+          }
+          APPSETTINGSEOF
+            
             echo "Stopping existing containers..."
             docker-compose down
             
