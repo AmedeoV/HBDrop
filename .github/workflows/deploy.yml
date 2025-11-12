@@ -33,6 +33,7 @@ jobs:
             --exclude='obj' \
             --exclude='.env' \
             --exclude='*.user' \
+            --warning=no-file-changed \
             .
 
       - name: Copy to server
