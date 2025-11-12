@@ -49,6 +49,9 @@ jobs:
             tar xzf deploy.tar.gz
             rm deploy.tar.gz
             
+            echo "Copying docker-compose from example..."
+            cp docker-compose.example.yml docker-compose.yml
+            
             echo "Creating .env file..."
             cat > .env << 'ENVEOF'
           ENCRYPTION_MASTER_KEY=${{ secrets.ENCRYPTION_MASTER_KEY }}
