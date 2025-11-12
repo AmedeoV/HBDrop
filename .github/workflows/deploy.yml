@@ -1,0 +1,88 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create deployment package
+        run: |
+          tar czf deploy.tar.gz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='bin' \
+            --exclude='obj' \
+            --exclude='.env' \
+            --exclude='*.user' \
+            .
+
+      - name: Copy to server
+        run: |
+          scp deploy.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/
+
+      - name: Deploy on server
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "bash -s" << 'ENDSSH'
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            echo "Extracting deployment package..."
+            tar xzf deploy.tar.gz
+            rm deploy.tar.gz
+            
+            echo "Creating .env file..."
+            cat > .env << 'ENVEOF'
+          ENCRYPTION_MASTER_KEY=${{ secrets.ENCRYPTION_MASTER_KEY }}
+          GIPHY_API_KEY=${{ secrets.GIPHY_API_KEY }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          ENVEOF
+            
+            echo "Stopping existing containers..."
+            docker-compose down
+            
+            echo "Building new images..."
+            docker-compose build --no-cache
+            
+            echo "Starting containers..."
+            docker-compose up -d
+            
+            echo "Cleaning up old images..."
+            docker image prune -f
+            
+            echo "Deployment complete!"
+            docker-compose ps
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          sleep 15
+          echo "Checking container status..."
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker-compose ps && docker-compose logs --tail=30 webapp"
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful to hbdrop.step0fail.com"
+          else
+            echo "❌ Deployment failed"
+          fi
