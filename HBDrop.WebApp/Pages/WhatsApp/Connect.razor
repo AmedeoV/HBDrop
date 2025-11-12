@@ -1,0 +1,608 @@
+@page "/whatsapp/connect"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject IWhatsAppService WhatsAppService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Connect WhatsApp - HBDrop</PageTitle>
+
+<div class="whatsapp-connect-container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <div class="whatsapp-icon-large">
+                            <span style="font-size: 4rem;">📱</span>
+                        </div>
+                        <h2 class="mt-3 mb-2">Connect Your WhatsApp</h2>
+                        <p class="text-muted">Choose your preferred connection method</p>
+                    </div>
+
+                    @if (connectionStatus == ConnectionStatus.NotStarted)
+                    {
+                        <div class="text-center">
+                            <button class="btn btn-success btn-lg px-5" @onclick="StartConnection" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Starting...</span>
+                                }
+                                else
+                                {
+                                    <span>📱 Generate QR Code</span>
+                                }
+                            </button>
+                        </div>
+                    }
+                    else if (connectionStatus == ConnectionStatus.QRReady)
+                    {
+                        <div class="qr-code-section">
+                            <div class="qr-code-container">
+                                @if (!string.IsNullOrEmpty(qrCodeDataUrl))
+                                {
+                                    <img src="@qrCodeDataUrl" alt="WhatsApp QR Code" class="qr-code-image" />
+                                }
+                                else
+                                {
+                                    <div class="qr-loading">
+                                        <div class="spinner-border text-success" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-3">Generating QR Code...</p>
+                                    </div>
+                                }
+                            </div>
+                            
+                            <div class="instructions mt-4">
+                                <h5 class="text-center mb-3">📲 How to Scan</h5>
+                                <ol class="scan-steps">
+                                    <li>Open WhatsApp on your phone</li>
+                                    <li>Tap <strong>Menu</strong> or <strong>Settings</strong></li>
+                                    <li>Tap <strong>Linked Devices</strong></li>
+                                    <li>Tap <strong>Link a Device</strong></li>
+                                    <li>Point your phone at this screen to scan the code</li>
+                                </ol>
+                            </div>
+
+                            <div class="text-center mt-4">
+                                <button class="btn btn-outline-secondary" @onclick="CancelConnection">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else if (connectionStatus == ConnectionStatus.Connecting)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-success mb-3" style="width: 3rem; height: 3rem;" role="status">
+                                <span class="visually-hidden">Connecting...</span>
+                            </div>
+                            <h4>Connecting...</h4>
+                            <p class="text-muted">Please wait while we establish the connection</p>
+                        </div>
+                    }
+                    else if (connectionStatus == ConnectionStatus.Connected)
+                    {
+                        <div class="text-center success-state">
+                            <div class="success-icon">✅</div>
+                            <h3 class="text-success mb-3">Successfully Connected!</h3>
+                            <p class="text-muted mb-4">Your WhatsApp account is now connected to HBDrop</p>
+                            
+                            <div class="d-flex gap-3 justify-content-center flex-wrap">
+                                <button class="btn btn-primary" @onclick="GoToDashboard">
+                                    Go to Dashboard
+                                </button>
+                                <button class="btn btn-outline-primary" @onclick="GoToContacts">
+                                    Add Contacts
+                                </button>
+                                <button class="btn btn-outline-danger" @onclick="DisconnectWhatsApp" disabled="@isLoading">
+                                    @if (isLoading)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>Disconnecting...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Disconnect WhatsApp</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else if (connectionStatus == ConnectionStatus.Error)
+                    {
+                        <div class="text-center error-state">
+                            <div class="error-icon">❌</div>
+                            <h4 class="text-danger mb-3">Connection Failed</h4>
+                            <div class="alert alert-danger text-start" role="alert">
+                                <pre class="mb-0" style="white-space: pre-wrap; font-family: inherit;">@errorMessage</pre>
+                            </div>
+                            
+                            <div class="d-flex gap-2 justify-content-center">
+                                <button class="btn btn-success" @onclick="RetryConnection">
+                                    🔄 Try Again
+                                </button>
+                                <button class="btn btn-outline-secondary" @onclick="CheckServiceHealth">
+                                    🔍 Check Service Status
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (connectionStatus == ConnectionStatus.QRReady)
+                    {
+                        <div class="alert alert-info mt-4 mb-0">
+                            <small>
+                                <strong>⏱️ Note:</strong> This QR code will expire in 60 seconds. 
+                                If it expires, click "Try Again" to generate a new one.
+                            </small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Info Card -->
+            <div class="card mt-4 border-0 bg-light">
+                <div class="card-body">
+                    <h6 class="mb-3">🔒 Privacy & Security</h6>
+                    <ul class="security-info">
+                        <li>Your WhatsApp session is encrypted and stored securely</li>
+                        <li>We never access your personal messages</li>
+                        <li>You can disconnect at any time from your dashboard</li>
+                        <li>Only birthday wishes are sent through this connection</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private enum ConnectionStatus
+    {
+        NotStarted,
+        QRReady,
+        Connecting,
+        Connected,
+        Error
+    }
+
+    private ConnectionStatus connectionStatus = ConnectionStatus.NotStarted;
+    private string? qrCodeDataUrl;
+    private string? errorMessage;
+    private bool isLoading = false;
+    private string? userId;
+    private System.Threading.Timer? pollingTimer;
+    private int pollAttempts = 0;
+    private const int MaxPollAttempts = 60; // 60 seconds
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var applicationUser = await UserManager.GetUserAsync(user);
+        if (applicationUser != null)
+        {
+            userId = applicationUser.Id;
+            
+            // Check if already connected
+            try
+            {
+                var status = await WhatsAppService.GetConnectionStatusAsync(userId);
+                if (status?.IsConnected == true)
+                {
+                    connectionStatus = ConnectionStatus.Connected;
+                }
+            }
+            catch
+            {
+                // Ignore error, user can try to connect
+            }
+        }
+    }
+
+    private async Task StartConnection()
+    {
+        isLoading = true;
+        errorMessage = null;
+        pollAttempts = 0;
+
+        try
+        {
+            Console.WriteLine($"[Connect] Starting connection for user {userId}");
+            
+            // First check if already connected
+            var currentStatus = await WhatsAppService.GetConnectionStatusAsync(userId!);
+            
+            if (currentStatus?.IsConnected == true)
+            {
+                Console.WriteLine($"[Connect] User already connected. Disconnecting to generate new QR...");
+                
+                // Already connected, disconnect first to get new QR
+                var disconnected = await WhatsAppService.DisconnectAsync(userId!);
+                if (disconnected)
+                {
+                    await UpdateSessionStatus(false);
+                    Console.WriteLine($"[Connect] Successfully disconnected. Waiting for cleanup...");
+                    // Wait longer for Baileys to close socket, delete auth_info and restart
+                    await Task.Delay(7000);
+                }
+                else
+                {
+                    Console.WriteLine($"[Connect] Warning: Disconnect returned false");
+                }
+            }
+            
+            Console.WriteLine($"[Connect] Requesting QR code from Baileys...");
+            
+            // Request QR code from Baileys service
+            var qrData = await WhatsAppService.GetQRCodeAsync(userId!);
+            
+            if (!string.IsNullOrEmpty(qrData))
+            {
+                Console.WriteLine($"[Connect] QR code received successfully");
+                qrCodeDataUrl = qrData;
+                connectionStatus = ConnectionStatus.QRReady;
+                
+                // Start polling for connection status
+                StartPollingConnectionStatus();
+            }
+            else
+            {
+                Console.WriteLine($"[Connect] Failed to get QR code - empty response");
+                errorMessage = "❌ Failed to generate QR code. Possible issues:\n" +
+                              "• WhatsApp service might be down\n" +
+                              "• Network connectivity issue\n" +
+                              "• Previous session not fully cleaned up\n\n" +
+                              "Please wait a moment and try again.";
+                connectionStatus = ConnectionStatus.Error;
+            }
+        }
+        catch (HttpRequestException httpEx)
+        {
+            Console.WriteLine($"[Connect] HTTP error: {httpEx.Message}");
+            errorMessage = $"🌐 Network Error: Unable to reach WhatsApp service.\n" +
+                          $"Details: {httpEx.Message}\n\n" +
+                          $"Please check:\n" +
+                          $"• Is the Baileys service running?\n" +
+                          $"• Check Docker containers status\n" +
+                          $"• Network connectivity";
+            connectionStatus = ConnectionStatus.Error;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Connect] Unexpected error: {ex.Message}");
+            errorMessage = $"❌ Unexpected Error: {ex.Message}\n\n" +
+                          $"Type: {ex.GetType().Name}\n" +
+                          $"Please try again or contact support if the issue persists.";
+            connectionStatus = ConnectionStatus.Error;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void StartPollingConnectionStatus()
+    {
+        pollingTimer = new System.Threading.Timer(async _ =>
+        {
+            await CheckConnectionStatus();
+        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    private async Task CheckConnectionStatus()
+    {
+        if (pollAttempts >= MaxPollAttempts)
+        {
+            await InvokeAsync(() =>
+            {
+                StopPolling();
+                errorMessage = "⏱️ QR code expired after 60 seconds. Please click 'Try Again' to generate a new QR code.";
+                connectionStatus = ConnectionStatus.Error;
+                StateHasChanged();
+            });
+            return;
+        }
+
+        pollAttempts++;
+
+        try
+        {
+            var status = await WhatsAppService.GetConnectionStatusAsync(userId!);
+            
+            if (status == null)
+            {
+                // Service returned null - might be a connection issue
+                if (pollAttempts % 10 == 0) // Log every 10 attempts
+                {
+                    Console.WriteLine($"[Connect] Null status response on attempt {pollAttempts}");
+                }
+                return;
+            }
+            
+            if (status.IsConnected)
+            {
+                Console.WriteLine($"[Connect] Connection successful! Phone: {status.PhoneNumber ?? "Unknown"}");
+                
+                // Save or update WhatsAppSession in database
+                await SaveWhatsAppSession(status.PhoneNumber ?? userId);
+                
+                await InvokeAsync(() =>
+                {
+                    StopPolling();
+                    connectionStatus = ConnectionStatus.Connected;
+                    StateHasChanged();
+                });
+            }
+            else
+            {
+                // Not connected yet, continue polling
+                if (pollAttempts % 5 == 0) // Log every 5 attempts for debugging
+                {
+                    Console.WriteLine($"[Connect] Polling attempt {pollAttempts}/{MaxPollAttempts}: Not connected yet. Message: {status.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error but continue polling
+            Console.WriteLine($"[Connect] Error checking status (attempt {pollAttempts}): {ex.Message}");
+            
+            // If we've failed multiple times, show a more specific error
+            if (pollAttempts > MaxPollAttempts / 2)
+            {
+                await InvokeAsync(() =>
+                {
+                    errorMessage = $"⚠️ Connection issue detected: {ex.Message}. Retrying...";
+                    StateHasChanged();
+                });
+            }
+        }
+    }
+
+    private async Task SaveWhatsAppSession(string phoneNumber)
+    {
+        try
+        {
+            var existingSession = await DbContext.WhatsAppSessions
+                .FirstOrDefaultAsync(w => w.UserId == userId);
+
+            if (existingSession != null)
+            {
+                existingSession.IsActive = true;
+                existingSession.LastVerifiedAt = DateTime.UtcNow;
+                existingSession.UpdatedAt = DateTime.UtcNow;
+                existingSession.PhoneNumber = phoneNumber;
+            }
+            else
+            {
+                var newSession = new WhatsAppSession
+                {
+                    UserId = userId!,
+                    PhoneNumber = phoneNumber,
+                    IsActive = true,
+                    EncryptedSessionData = "managed-by-baileys", // Baileys manages its own session storage
+                    EncryptionIV = "n/a",
+                    LastVerifiedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                };
+                DbContext.WhatsAppSessions.Add(newSession);
+            }
+
+            await DbContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't fail the connection
+            Console.WriteLine($"Error saving WhatsApp session: {ex.Message}");
+        }
+    }
+
+    private void StopPolling()
+    {
+        pollingTimer?.Dispose();
+        pollingTimer = null;
+    }
+
+    private async Task CancelConnection()
+    {
+        StopPolling();
+        
+        try
+        {
+            await WhatsAppService.DisconnectAsync(userId!);
+        }
+        catch
+        {
+            // Ignore errors on cancel
+        }
+        
+        connectionStatus = ConnectionStatus.NotStarted;
+        qrCodeDataUrl = null;
+    }
+
+    private async Task RetryConnection()
+    {
+        connectionStatus = ConnectionStatus.NotStarted;
+        qrCodeDataUrl = null;
+        errorMessage = null;
+        await StartConnection();
+    }
+
+    private void GoToDashboard()
+    {
+        Navigation.NavigateTo("/dashboard");
+    }
+
+    private void GoToContacts()
+    {
+        Navigation.NavigateTo("/contacts/add");
+    }
+
+    private async Task DisconnectWhatsApp()
+    {
+        isLoading = true;
+        errorMessage = null;
+        
+        try
+        {
+            Console.WriteLine($"[Connect] Disconnecting user {userId}");
+            var success = await WhatsAppService.DisconnectAsync(userId!);
+            
+            if (success)
+            {
+                Console.WriteLine($"[Connect] Successfully disconnected");
+                // Update database session status
+                await UpdateSessionStatus(false);
+                
+                connectionStatus = ConnectionStatus.NotStarted;
+                qrCodeDataUrl = null;
+                errorMessage = null;
+            }
+            else
+            {
+                Console.WriteLine($"[Connect] Disconnect returned false");
+                errorMessage = "⚠️ Failed to disconnect. The service may already be disconnected.\n" +
+                              "Please refresh the page and try again.";
+                connectionStatus = ConnectionStatus.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Connect] Error disconnecting: {ex.Message}");
+            errorMessage = $"❌ Error disconnecting: {ex.Message}\n\n" +
+                          $"You may need to refresh the page and try again.";
+            connectionStatus = ConnectionStatus.Error;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CheckServiceHealth()
+    {
+        isLoading = true;
+        try
+        {
+            Console.WriteLine($"[Connect] Checking WhatsApp service health...");
+            var health = await WhatsAppService.GetHealthAsync();
+            
+            if (health != null)
+            {
+                var healthMessage = $"✅ WhatsApp Service Status: OK\n\n" +
+                                  $"Active Sessions: {health.ActiveSessions}\n" +
+                                  $"Service Status: {health.Status ?? "Running"}\n" +
+                                  $"Message: {health.Message ?? "All systems operational"}";
+                
+                Console.WriteLine($"[Connect] Health check successful: {health.ActiveSessions} active sessions");
+                errorMessage = healthMessage;
+            }
+            else
+            {
+                Console.WriteLine($"[Connect] Health check returned null");
+                errorMessage = "❌ WhatsApp Service Health Check Failed\n\n" +
+                              "The service is not responding. Please check:\n" +
+                              "• Is the Baileys container running? (docker ps)\n" +
+                              "• Check logs: docker-compose logs baileys\n" +
+                              "• Restart if needed: docker-compose restart baileys";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Connect] Health check error: {ex.Message}");
+            errorMessage = $"❌ Service Health Check Error\n\n" +
+                          $"Error: {ex.Message}\n" +
+                          $"Type: {ex.GetType().Name}\n\n" +
+                          $"The WhatsApp service appears to be unreachable.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task UpdateSessionStatus(bool isActive)
+    {
+        try
+        {
+            var session = await DbContext.WhatsAppSessions
+                .FirstOrDefaultAsync(w => w.UserId == userId);
+
+            if (session != null)
+            {
+                session.IsActive = isActive;
+                session.UpdatedAt = DateTime.UtcNow;
+                if (!isActive)
+                {
+                    session.LastVerifiedAt = null;
+                }
+                await DbContext.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating session status: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        StopPolling();
+    }
+}
+
+<style>
+    .pairing-code-display {
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .code-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        padding: 2rem;
+        margin: 1rem auto;
+        max-width: 400px;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+    }
+
+    .pairing-code-text {
+        font-size: 3rem;
+        font-weight: bold;
+        color: white;
+        letter-spacing: 0.5rem;
+        font-family: 'Courier New', monospace;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .connection-method-selector {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .btn-check:checked + .btn-outline-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: white;
+    }
+</style>

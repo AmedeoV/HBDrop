@@ -1,0 +1,292 @@
+@page "/groups"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Services
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject IWhatsAppService WhatsAppService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>WhatsApp Groups - HBDrop</PageTitle>
+
+<div class="groups-container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header -->
+            <div class="mb-4">
+                <h2>💬 WhatsApp Groups</h2>
+                <p class="text-muted">Your WhatsApp groups are automatically added to contacts</p>
+                <div class="alert alert-info">
+                    <small><strong>ℹ️ Note:</strong> All your WhatsApp groups are automatically imported as contacts. You can assign birthdays to groups to send birthday wishes to everyone in that group!</small>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success">
+                    <strong>✓</strong> @successMessage
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">
+                    <strong>Error:</strong> @errorMessage
+                </div>
+            }
+
+            @if (isLoading)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body text-center p-5">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted">Loading your WhatsApp groups...</p>
+                    </div>
+                </div>
+            }
+            else if (groups.Count == 0)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body text-center p-5">
+                        <div class="mb-3" style="font-size: 4rem;">💬</div>
+                        <h4>No Groups Found</h4>
+                        <p class="text-muted">
+                            You don't have any WhatsApp groups yet, or WhatsApp is not connected.
+                        </p>
+                        <button class="btn btn-primary" @onclick="LoadGroups">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">Found @filteredGroups.Count of @groups.Count groups</h5>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="LoadGroups">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
+
+                        <!-- Search box -->
+                        <div class="mb-3">
+                            <input type="text" 
+                                   class="form-control" 
+                                   placeholder="🔍 Search groups by name..."
+                                   @bind="searchQuery"
+                                   @bind:event="oninput"
+                                   @onkeyup="FilterGroups" />
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Group Name</th>
+                                        <th>Participants</th>
+                                        <th>Description</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var group in filteredGroups)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@group.Name</strong>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary">@group.Participants members</span>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    @(string.IsNullOrEmpty(group.Description) ? "-" : 
+                                                      group.Description.Length > 50 ? 
+                                                      group.Description.Substring(0, 50) + "..." : 
+                                                      group.Description)
+                                                </small>
+                                            </td>
+                                            <td>
+                                                @if (group.IsInContacts)
+                                                {
+                                                    <span class="badge bg-success">
+                                                        <i class="bi bi-check-circle"></i> In Contacts
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">
+                                                        <i class="bi bi-clock"></i> Syncing...
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-4">
+                    <h6><i class="bi bi-info-circle"></i> How it works</h6>
+                    <ul class="mb-0">
+                        <li>All your WhatsApp groups are automatically synced and added to your contacts</li>
+                        <li>You can assign birthdays to groups (e.g., "Family Group - John's Birthday")</li>
+                        <li>When John's birthday arrives, the message will be sent to the entire group</li>
+                        <li>Perfect for shared family groups, friend circles, or work teams!</li>
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private class GroupViewModel
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public int Participants { get; set; }
+        public string? Description { get; set; }
+        public long? LastMessageTime { get; set; }
+        public bool IsInContacts { get; set; } = false;
+    }
+
+    private List<GroupViewModel> groups = new();
+    private List<GroupViewModel> filteredGroups = new();
+    private bool isLoading = true;
+    private string errorMessage = "";
+    private string successMessage = "";
+    private string searchQuery = "";
+    private string userId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var applicationUser = await UserManager.GetUserAsync(user);
+        userId = applicationUser?.Id ?? "";
+        
+        await LoadGroups();
+    }
+
+    private async Task LoadGroups()
+    {
+        isLoading = true;
+        errorMessage = "";
+        successMessage = "";
+        groups.Clear();
+
+        try
+        {
+            var whatsappGroups = await WhatsAppService.GetGroupsAsync();
+            
+            // Get existing group contacts from database
+            var existingGroupIds = await DbContext.Contacts
+                .Where(c => c.UserId == userId && c.IsGroup)
+                .Select(c => c.GroupId)
+                .ToListAsync();
+            
+            groups = whatsappGroups.Select(g => new GroupViewModel
+            {
+                Id = g.Id,
+                Name = g.Name,
+                Participants = g.Participants,
+                Description = g.Description,
+                LastMessageTime = g.LastMessageTime,
+                IsInContacts = existingGroupIds.Contains(g.Id)
+            }).ToList();
+            
+            // Auto-sync new groups to contacts
+            await SyncNewGroupsToContacts(whatsappGroups, existingGroupIds);
+            
+            FilterGroups();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load groups: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SyncNewGroupsToContacts(List<WhatsAppGroup> whatsappGroups, List<string?> existingGroupIds)
+    {
+        try
+        {
+            var newGroups = whatsappGroups
+                .Where(g => !existingGroupIds.Contains(g.Id))
+                .ToList();
+
+            if (newGroups.Any())
+            {
+                foreach (var group in newGroups)
+                {
+                    var contact = new Contact
+                    {
+                        UserId = userId,
+                        Name = group.Name,
+                        PhoneNumber = group.Id, // Store group ID as phone number
+                        IsGroup = true,
+                        GroupId = group.Id,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    DbContext.Contacts.Add(contact);
+                }
+
+                await DbContext.SaveChangesAsync();
+                
+                successMessage = $"✓ Automatically added {newGroups.Count} new group(s) to your contacts!";
+                
+                // Update the IsInContacts status
+                foreach (var newGroup in newGroups)
+                {
+                    var groupVm = groups.FirstOrDefault(g => g.Id == newGroup.Id);
+                    if (groupVm != null)
+                    {
+                        groupVm.IsInContacts = true;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the whole operation if sync fails
+            Console.WriteLine($"Failed to sync new groups: {ex.Message}");
+        }
+    }
+
+    private void FilterGroups()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filteredGroups = new List<GroupViewModel>(groups);
+        }
+        else
+        {
+            filteredGroups = groups
+                .Where(g => g.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+}

@@ -1,0 +1,88 @@
+# Docker Compose for Development
+# Copy this to docker-compose.dev.yml and update passwords
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Development)
+  postgres:
+    image: postgres:16-alpine
+    container_name: hbdrop-postgres-dev
+    environment:
+      POSTGRES_DB: hbdrop
+      POSTGRES_USER: hbdrop_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # Set in .env file
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - hbdrop-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hbdrop_user -d hbdrop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Baileys WhatsApp Service (Development)
+  baileys:
+    build:
+      context: ./HBDrop.Baileys
+      dockerfile: Dockerfile
+    container_name: hbdrop-baileys-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - baileys_dev_auth:/app/auth_info
+    networks:
+      - hbdrop-dev-network
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); });"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+  # HBDrop Web Application (Development)
+  webapp:
+    build:
+      context: .
+      dockerfile: HBDrop.WebApp/Dockerfile
+    container_name: hbdrop-webapp-dev
+    ports:
+      - "5007:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      baileys:
+        condition: service_started
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=hbdrop;Username=hbdrop_user;Password=${POSTGRES_PASSWORD}
+      - Baileys__ApiUrl=http://baileys:3000
+      - Encryption__MasterKey=${ENCRYPTION_MASTER_KEY}
+    networks:
+      - hbdrop-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    volumes:
+      # Enable hot reload in development (optional)
+      - ./HBDrop.WebApp:/src/HBDrop.WebApp
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  baileys_dev_auth:
+    driver: local
+
+networks:
+  hbdrop-dev-network:
+    driver: bridge

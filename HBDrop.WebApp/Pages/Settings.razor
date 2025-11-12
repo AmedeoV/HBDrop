@@ -1,0 +1,249 @@
+@page "/settings"
+@using Microsoft.AspNetCore.Identity
+@using HBDrop.WebApp.Models
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+
+<PageTitle>Settings - HBDrop</PageTitle>
+
+<div class="settings-container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <h2 class="mb-4">⚙️ Settings</h2>
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <strong>✓ Success!</strong> @successMessage
+                    <button type="button" class="btn-close" @onclick="() => successMessage = string.Empty"></button>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong>Error!</strong> @errorMessage
+                    <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+                </div>
+            }
+
+            <!-- Timezone Settings Card -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="card-title mb-3">🌍 Birthday Notification Settings</h5>
+                    <p class="text-muted mb-4">
+                        Set your default timezone and preferred time for birthday notifications. 
+                        These settings apply to all your contacts unless you override them individually.
+                    </p>
+
+                    <EditForm Model="@settingsModel" OnValidSubmit="SaveSettings">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Your Timezone</label>
+                            <InputSelect class="form-select" @bind-Value="settingsModel.TimeZoneId">
+                                <option value="">Select your timezone...</option>
+                                @foreach (var tz in commonTimeZones)
+                                {
+                                    <option value="@tz.Id">@tz.DisplayName</option>
+                                }
+                            </InputSelect>
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i> Birthday messages will be sent according to your local time.
+                            </div>
+                            <ValidationMessage For="@(() => settingsModel.TimeZoneId)" />
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Preferred Send Time</label>
+                            <InputSelect class="form-select" @bind-Value="settingsModel.MessageHour">
+                                @for (int hour = 0; hour < 24; hour++)
+                                {
+                                    var displayTime = FormatHour(hour);
+                                    <option value="@hour">@displayTime</option>
+                                }
+                            </InputSelect>
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i> Birthday wishes will be sent at this time in your timezone.
+                            </div>
+                            <ValidationMessage For="@(() => settingsModel.MessageHour)" />
+                        </div>
+
+                        <div class="alert alert-info">
+                            <strong>💡 Tip:</strong> You can override these settings for individual contacts when adding or editing them.
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <span>💾 Save Settings</span>
+                                }
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" @onclick="Cancel">
+                                Cancel
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+
+            <!-- Current Settings Preview -->
+            @if (currentUser != null && !string.IsNullOrEmpty(currentUser.DefaultTimeZoneId))
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h6 class="card-title">📍 Current Settings</h6>
+                        <ul class="list-unstyled mb-0">
+                            <li><strong>Timezone:</strong> @currentUser.DefaultTimeZoneId</li>
+                            <li><strong>Send Time:</strong> @FormatHour(currentUser.DefaultMessageHour)</li>
+                            <li><strong>Current Local Time:</strong> @GetCurrentLocalTime()</li>
+                        </ul>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private class SettingsModel
+    {
+        public string? TimeZoneId { get; set; }
+        public int MessageHour { get; set; } = 9;
+    }
+
+    private class TimeZoneOption
+    {
+        public string Id { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+    }
+
+    private SettingsModel settingsModel = new();
+    private ApplicationUser? currentUser;
+    private bool isSaving = false;
+    private string successMessage = "";
+    private string errorMessage = "";
+
+    private List<TimeZoneOption> commonTimeZones = new()
+    {
+        new() { Id = "Europe/Dublin", DisplayName = "🇮🇪 Ireland (Dublin) - GMT/IST" },
+        new() { Id = "Europe/London", DisplayName = "🇬🇧 United Kingdom (London) - GMT/BST" },
+        new() { Id = "Europe/Paris", DisplayName = "🇫🇷 France (Paris) - CET/CEST" },
+        new() { Id = "Europe/Berlin", DisplayName = "🇩🇪 Germany (Berlin) - CET/CEST" },
+        new() { Id = "Europe/Madrid", DisplayName = "🇪🇸 Spain (Madrid) - CET/CEST" },
+        new() { Id = "Europe/Rome", DisplayName = "🇮🇹 Italy (Rome) - CET/CEST" },
+        new() { Id = "Europe/Amsterdam", DisplayName = "🇳🇱 Netherlands (Amsterdam) - CET/CEST" },
+        new() { Id = "America/New_York", DisplayName = "🇺🇸 USA East (New York) - EST/EDT" },
+        new() { Id = "America/Chicago", DisplayName = "🇺🇸 USA Central (Chicago) - CST/CDT" },
+        new() { Id = "America/Denver", DisplayName = "🇺🇸 USA Mountain (Denver) - MST/MDT" },
+        new() { Id = "America/Los_Angeles", DisplayName = "🇺🇸 USA West (Los Angeles) - PST/PDT" },
+        new() { Id = "America/Toronto", DisplayName = "🇨🇦 Canada (Toronto) - EST/EDT" },
+        new() { Id = "America/Vancouver", DisplayName = "🇨🇦 Canada (Vancouver) - PST/PDT" },
+        new() { Id = "America/Mexico_City", DisplayName = "🇲🇽 Mexico (Mexico City) - CST/CDT" },
+        new() { Id = "America/Sao_Paulo", DisplayName = "🇧🇷 Brazil (São Paulo) - BRT" },
+        new() { Id = "Australia/Sydney", DisplayName = "🇦🇺 Australia (Sydney) - AEST/AEDT" },
+        new() { Id = "Australia/Melbourne", DisplayName = "🇦🇺 Australia (Melbourne) - AEST/AEDT" },
+        new() { Id = "Pacific/Auckland", DisplayName = "🇳🇿 New Zealand (Auckland) - NZST/NZDT" },
+        new() { Id = "Asia/Tokyo", DisplayName = "🇯🇵 Japan (Tokyo) - JST" },
+        new() { Id = "Asia/Seoul", DisplayName = "🇰🇷 South Korea (Seoul) - KST" },
+        new() { Id = "Asia/Shanghai", DisplayName = "🇨🇳 China (Shanghai) - CST" },
+        new() { Id = "Asia/Hong_Kong", DisplayName = "🇭🇰 Hong Kong - HKT" },
+        new() { Id = "Asia/Dubai", DisplayName = "🇦🇪 UAE (Dubai) - GST" },
+        new() { Id = "Asia/Singapore", DisplayName = "🇸🇬 Singapore - SGT" },
+        new() { Id = "Asia/Bangkok", DisplayName = "🇹🇭 Thailand (Bangkok) - ICT" },
+        new() { Id = "Asia/Kolkata", DisplayName = "🇮🇳 India (Kolkata) - IST" },
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        currentUser = await UserManager.GetUserAsync(user);
+        if (currentUser != null)
+        {
+            // Load current settings
+            settingsModel.TimeZoneId = currentUser.DefaultTimeZoneId;
+            settingsModel.MessageHour = currentUser.DefaultMessageHour;
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        if (currentUser == null) return;
+
+        isSaving = true;
+        errorMessage = "";
+        successMessage = "";
+
+        try
+        {
+            currentUser.DefaultTimeZoneId = settingsModel.TimeZoneId;
+            currentUser.DefaultMessageHour = settingsModel.MessageHour;
+
+            var result = await UserManager.UpdateAsync(currentUser);
+
+            if (result.Succeeded)
+            {
+                successMessage = "Your settings have been saved successfully!";
+            }
+            else
+            {
+                errorMessage = "Failed to save settings: " + string.Join(", ", result.Errors.Select(e => e.Description));
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/dashboard");
+    }
+
+    private string FormatHour(int hour)
+    {
+        if (hour == 0) return "12:00 AM (Midnight)";
+        if (hour == 12) return "12:00 PM (Noon)";
+        if (hour < 12) return $"{hour}:00 AM";
+        return $"{hour - 12}:00 PM";
+    }
+
+    private string GetCurrentLocalTime()
+    {
+        if (currentUser == null || string.IsNullOrEmpty(currentUser.DefaultTimeZoneId))
+            return "N/A";
+
+        try
+        {
+            var timeZone = TimeZoneInfo.FindSystemTimeZoneById(currentUser.DefaultTimeZoneId);
+            var localTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
+            return localTime.ToString("HH:mm:ss (dddd, MMMM dd, yyyy)");
+        }
+        catch
+        {
+            return "Invalid timezone";
+        }
+    }
+}

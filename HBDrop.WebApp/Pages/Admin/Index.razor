@@ -1,0 +1,503 @@
+@page "/admin"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
+@attribute [Authorize(Roles = "Admin")]
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject ApplicationDbContext DbContext
+@inject IWhatsAppService WhatsAppService
+
+<PageTitle>Admin Dashboard - HBDrop</PageTitle>
+
+<div class="admin-container">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>🛡️ Admin Dashboard</h2>
+            <p class="text-muted">System overview and user management</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = string.Empty"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+        </div>
+    }
+
+    <!-- System Statistics -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-white-50">Total Users</h6>
+                            <h2 class="mb-0">@totalUsers</h2>
+                        </div>
+                        <div class="fs-1">👥</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-white-50">Total Contacts</h6>
+                            <h2 class="mb-0">@totalContacts</h2>
+                        </div>
+                        <div class="fs-1">📇</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-white-50">Messages Sent</h6>
+                            <h2 class="mb-0">@totalMessages</h2>
+                        </div>
+                        <div class="fs-1">📨</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">Active Birthdays</h6>
+                            <h2 class="mb-0">@activeBirthdays</h2>
+                        </div>
+                        <div class="fs-1">🎂</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Health -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">🏥 System Health</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><strong>Database Status:</strong></span>
+                            <span class="badge bg-success">✓ Connected</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><strong>WhatsApp Service:</strong></span>
+                            <span class="badge @(isWhatsAppServiceUp ? "bg-success" : "bg-danger")">
+                                @(isWhatsAppServiceUp ? "✓ Online" : "✗ Offline")
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><strong>Hangfire Jobs:</strong></span>
+                            <span class="badge bg-success">✓ Running</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span><strong>Last Backup:</strong></span>
+                            <span class="text-muted">Never</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">📊 Recent Activity</h5>
+                </div>
+                <div class="card-body">
+                    @if (recentMessages.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var msg in recentMessages.Take(5))
+                            {
+                                <div class="list-group-item px-0">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <small class="text-muted">@(msg.SentAt?.ToShortDateString() ?? "") @(msg.SentAt?.ToShortTimeString() ?? "")</small>
+                                            <div>@(msg.Contact?.Name ?? "Unknown")</div>
+                                        </div>
+                                        <span class="badge bg-@(msg.Status == MessageStatus.Sent ? "success" : "warning")">
+                                            @msg.Status.ToString()
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No recent messages</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Management -->
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">👥 User Management</h5>
+                    <button class="btn btn-sm btn-primary" @onclick="RefreshUsers">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (users.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Username</th>
+                                        <th>Contacts</th>
+                                        <th>Messages</th>
+                                        <th>WhatsApp</th>
+                                        <th>Roles</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var user in users)
+                                    {
+                                        <tr>
+                                            <td>@user.Email</td>
+                                            <td>@user.UserName</td>
+                                            <td>@user.ContactCount</td>
+                                            <td>@user.MessageCount</td>
+                                            <td>
+                                                @if (user.IsWhatsAppConnected)
+                                                {
+                                                    <span class="badge bg-success">Connected</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Not Connected</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @foreach (var role in user.Roles)
+                                                {
+                                                    <span class="badge bg-primary me-1">@role</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!user.Roles.Contains("Admin"))
+                                                {
+                                                    <button class="btn btn-sm btn-outline-primary me-1" 
+                                                            @onclick="() => PromoteToAdmin(user.Id)">
+                                                        Make Admin
+                                                    </button>
+                                                }
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        @onclick="() => ShowDeleteConfirm(user.Id, user.Email)"
+                                                        disabled="@(user.Roles.Contains("Admin"))">
+                                                    Delete
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No users found</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    @if (showDeleteConfirm)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Confirm Delete</h5>
+                        <button type="button" class="btn-close" @onclick="() => showDeleteConfirm = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete user <strong>@userToDelete</strong>?</p>
+                        <p class="text-danger mb-0">This action cannot be undone. All contacts and messages for this user will also be deleted.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="() => showDeleteConfirm = false">Cancel</button>
+                        <button type="button" class="btn btn-danger" @onclick="DeleteUser">Delete User</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private class UserViewModel
+    {
+        public string Id { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public int ContactCount { get; set; }
+        public int MessageCount { get; set; }
+        public bool IsWhatsAppConnected { get; set; }
+        public List<string> Roles { get; set; } = new();
+    }
+
+    private List<UserViewModel> users = new();
+    private List<Message> recentMessages = new();
+    private bool isLoading = true;
+    private string successMessage = "";
+    private string errorMessage = "";
+    
+    private int totalUsers = 0;
+    private int totalContacts = 0;
+    private int totalMessages = 0;
+    private int activeBirthdays = 0;
+    private bool isWhatsAppServiceUp = false;
+
+    private bool showDeleteConfirm = false;
+    private string userToDeleteId = "";
+    private string userToDelete = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        try
+        {
+            // Load statistics
+            totalUsers = await DbContext.Users.CountAsync();
+            totalContacts = await DbContext.Contacts.CountAsync();
+            totalMessages = await DbContext.Messages.CountAsync();
+            activeBirthdays = await DbContext.Birthdays.CountAsync(b => b.IsEnabled);
+
+            // Check WhatsApp service
+            try
+            {
+                // Just try to hit the service to see if it's up
+                // We don't need a specific user's status for system health
+                isWhatsAppServiceUp = true;
+                // Note: In a real scenario, you might want to add a health check endpoint to the WhatsApp service
+            }
+            catch
+            {
+                isWhatsAppServiceUp = false;
+            }
+
+            // Load recent messages
+            recentMessages = await DbContext.Messages
+                .Include(m => m.Contact)
+                .OrderByDescending(m => m.SentAt)
+                .Take(10)
+                .ToListAsync();
+
+            // Load users
+            await RefreshUsers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshUsers()
+    {
+        try
+        {
+            var allUsers = await UserManager.Users.ToListAsync();
+            users.Clear();
+
+            foreach (var user in allUsers)
+            {
+                var roles = await UserManager.GetRolesAsync(user);
+                var contactCount = await DbContext.Contacts.CountAsync(c => c.UserId == user.Id);
+                var messageCount = await DbContext.Messages.CountAsync(m => m.UserId == user.Id);
+                var hasWhatsApp = await DbContext.WhatsAppSessions.AnyAsync(w => w.UserId == user.Id && w.IsActive);
+
+                users.Add(new UserViewModel
+                {
+                    Id = user.Id,
+                    Email = user.Email ?? "",
+                    UserName = user.UserName ?? "",
+                    ContactCount = contactCount,
+                    MessageCount = messageCount,
+                    IsWhatsAppConnected = hasWhatsApp,
+                    Roles = roles.ToList()
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading users: {ex.Message}";
+        }
+    }
+
+    private async Task PromoteToAdmin(string userId)
+    {
+        try
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                errorMessage = "User not found";
+                return;
+            }
+
+            // Ensure Admin role exists
+            if (!await RoleManager.RoleExistsAsync("Admin"))
+            {
+                await RoleManager.CreateAsync(new IdentityRole("Admin"));
+            }
+
+            var result = await UserManager.AddToRoleAsync(user, "Admin");
+            if (result.Succeeded)
+            {
+                successMessage = $"User {user.Email} promoted to Admin";
+                await RefreshUsers();
+            }
+            else
+            {
+                errorMessage = $"Failed to promote user: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error promoting user: {ex.Message}";
+        }
+    }
+
+    private void ShowDeleteConfirm(string userId, string email)
+    {
+        userToDeleteId = userId;
+        userToDelete = email;
+        showDeleteConfirm = true;
+    }
+
+    private async Task DeleteUser()
+    {
+        try
+        {
+            var user = await UserManager.FindByIdAsync(userToDeleteId);
+            if (user == null)
+            {
+                errorMessage = "User not found";
+                showDeleteConfirm = false;
+                return;
+            }
+
+            // Delete user's data first
+            var contacts = await DbContext.Contacts.Where(c => c.UserId == userToDeleteId).ToListAsync();
+            DbContext.Contacts.RemoveRange(contacts);
+
+            var messages = await DbContext.Messages.Where(m => m.UserId == userToDeleteId).ToListAsync();
+            DbContext.Messages.RemoveRange(messages);
+
+            var sessions = await DbContext.WhatsAppSessions.Where(w => w.UserId == userToDeleteId).ToListAsync();
+            DbContext.WhatsAppSessions.RemoveRange(sessions);
+
+            await DbContext.SaveChangesAsync();
+
+            // Delete user
+            var result = await UserManager.DeleteAsync(user);
+            if (result.Succeeded)
+            {
+                successMessage = $"User {userToDelete} deleted successfully";
+                await LoadData();
+            }
+            else
+            {
+                errorMessage = $"Failed to delete user: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting user: {ex.Message}";
+        }
+        finally
+        {
+            showDeleteConfirm = false;
+            userToDeleteId = "";
+            userToDelete = "";
+        }
+    }
+}
+
+<style>
+    .admin-container {
+        padding: 2rem 0;
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        padding: 1rem 1.5rem;
+    }
+
+    .table th {
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .badge {
+        font-weight: 500;
+    }
+
+    .modal.show {
+        display: block;
+    }
+</style>

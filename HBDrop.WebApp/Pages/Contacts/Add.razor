@@ -1,0 +1,1460 @@
+@page "/contacts/add"
+@page "/contacts/create"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject RegionalEventsService RegionalEventsService
+
+<PageTitle>Add Contact - HBDrop</PageTitle>
+
+<div class="add-contact-container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>➕ Add New Contact</h2>
+                <a href="/contacts" class="btn btn-outline-secondary">← Back to Contacts</a>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong>Error!</strong> @errorMessage
+                    <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+                </div>
+            }
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <EditForm Model="@contactModel" OnValidSubmit="SaveContact">
+                        <DataAnnotationsValidator />
+
+                        <!-- Contact Information -->
+                        <h5 class="mb-3">👤 Contact Information</h5>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Full Name <span class="text-danger">*</span></label>
+                            <InputText class="form-control" @bind-Value="contactModel.Name" placeholder="e.g., John Doe" />
+                            <ValidationMessage For="@(() => contactModel.Name)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Phone Number <span class="text-danger">*</span></label>
+                            <InputText class="form-control" @bind-Value="contactModel.PhoneNumber" placeholder="e.g., +353899548661" />
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i> Include country code (e.g., +353 for Ireland, +1 for USA)
+                            </div>
+                            <ValidationMessage For="@(() => contactModel.PhoneNumber)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Display Name <small class="text-muted">(optional)</small></label>
+                            <InputText class="form-control" @bind-Value="contactModel.DisplayName" placeholder="e.g., Johnny (for birthday messages)" />
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i> Name to use in birthday messages. If not set, will use first name.
+                            </div>
+                            <ValidationMessage For="@(() => contactModel.DisplayName)" />
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Email <small class="text-muted">(optional)</small></label>
+                            <InputText class="form-control" @bind-Value="contactModel.Email" placeholder="john@example.com" />
+                            <ValidationMessage For="@(() => contactModel.Email)" />
+                        </div>
+
+                        <!-- Birthday Information -->
+                        <h5 class="mb-3">🎂 Birthday Information</h5>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Month <span class="text-danger">*</span></label>
+                                <InputSelect class="form-select" @bind-Value="contactModel.BirthMonth">
+                                    <option value="0">Select month...</option>
+                                    <option value="1">January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7">July</option>
+                                    <option value="8">August</option>
+                                    <option value="9">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </InputSelect>
+                                <ValidationMessage For="@(() => contactModel.BirthMonth)" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Day <span class="text-danger">*</span></label>
+                                <InputNumber class="form-control" @bind-Value="contactModel.BirthDay" min="1" max="31" placeholder="1-31" />
+                                <ValidationMessage For="@(() => contactModel.BirthDay)" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Year <small class="text-muted">(optional)</small></label>
+                                <InputNumber class="form-control" @bind-Value="contactModel.BirthYear" min="1900" max="@DateTime.Now.Year" placeholder="YYYY" />
+                                <div class="form-text">
+                                    <small>Optional - helps calculate age</small>
+                                </div>
+                                <ValidationMessage For="@(() => contactModel.BirthYear)" />
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Custom Birthday Message <small class="text-muted">(optional)</small></label>
+                            <InputTextArea class="form-control" @bind-Value="contactModel.CustomMessage" rows="3" 
+                                placeholder="e.g., 🎉 Happy Birthday {Name}! Wishing you an amazing {Age}th birthday!" />
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i> Use {Name} for first name, {Age} for age. Leave blank for default message.
+                            </div>
+                            <ValidationMessage For="@(() => contactModel.CustomMessage)" />
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Send Birthday Message To <small class="text-muted">(optional)</small></label>
+                            
+                            @if (!showGroupSearch)
+                            {
+                                <div class="d-flex gap-2 align-items-center">
+                                    @if (selectedGroup == null)
+                                    {
+                                        <div class="alert alert-info mb-0 flex-grow-1">
+                                            📱 <strong>Send directly to this person</strong>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="alert alert-success mb-0 flex-grow-1 d-flex justify-content-between align-items-center">
+                                            <span>📢 <strong>@selectedGroup.Name</strong></span>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => SelectGroup(null)">
+                                                <i class="bi bi-x"></i> Remove
+                                            </button>
+                                        </div>
+                                    }
+                                    <button type="button" class="btn btn-primary" @onclick="() => showGroupSearch = true">
+                                        <i class="bi bi-search"></i> @(selectedGroup == null ? "Select Group" : "Change Group")
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="input-group mb-3">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   placeholder="Search for a group..." 
+                                                   @bind="groupSearchQuery"
+                                                   @bind:event="oninput"
+                                                   @onkeyup="FilterGroups" />
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="ClearGroupSearch">
+                                                <i class="bi bi-x"></i> Cancel
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="list-group" style="max-height: 300px; overflow-y: auto;">
+                                            <button type="button" 
+                                                    class="list-group-item list-group-item-action @(string.IsNullOrEmpty(contactModel.SendToGroupId) ? "active" : "")"
+                                                    @onclick="() => SelectGroup(null)">
+                                                📱 Send directly to this person
+                                            </button>
+                                            
+                                            @if (filteredGroups.Any())
+                                            {
+                                                @foreach (var group in filteredGroups)
+                                                {
+                                                    <button type="button" 
+                                                            class="list-group-item list-group-item-action @(contactModel.SendToGroupId == group.GroupId ? "active" : "")"
+                                                            @onclick="() => SelectGroup(group)">
+                                                        📢 @group.Name
+                                                    </button>
+                                                }
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(groupSearchQuery))
+                                            {
+                                                <div class="list-group-item text-muted">
+                                                    No groups found matching "@groupSearchQuery"
+                                                </div>
+                                            }
+                                            else if (!availableGroups.Any())
+                                            {
+                                                <div class="list-group-item text-muted">
+                                                    No WhatsApp groups available
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i> Choose a WhatsApp group to post the birthday message to, or leave as default to send directly to the person.
+                            </div>
+                        </div>
+
+                        <!-- Additional Birthdays Section -->
+                        <h5 class="mb-3 mt-4">👨‍👩‍👧‍👦 Additional Birthdays (Kids, Family Members)</h5>
+                        <div class="alert alert-info mb-3">
+                            <small>
+                                <strong>Tip:</strong> Add birthdays for family members (kids, spouse, etc.) who don't have their own phone. 
+                                You can choose to send the message to this contact or to a WhatsApp group.
+                            </small>
+                        </div>
+
+                        @foreach (var (additionalBirthday, index) in additionalBirthdays.Select((b, i) => (b, i)))
+                        {
+                            <div class="card mb-3 border-primary">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">Birthday #@(index + 1)</h6>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveAdditionalBirthday(index)">
+                                            🗑️ Remove
+                                        </button>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Person's Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" @bind="additionalBirthday.Name" 
+                                                   placeholder="e.g., Michael (son)" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Relationship <small class="text-muted">(optional)</small></label>
+                                            <input type="text" class="form-control" @bind="additionalBirthday.Relationship" 
+                                                   placeholder="e.g., Son, Daughter, Spouse" />
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label fw-bold">Month <span class="text-danger">*</span></label>
+                                            @if (!additionalBirthday.ShowMonthDropdown)
+                                            {
+                                                <div class="input-group">
+                                                    <input type="text" class="form-control" readonly
+                                                           value="@(additionalBirthday.BirthMonth > 0 ? GetMonthName(additionalBirthday.BirthMonth) : "Select month...")"
+                                                           @onclick="() => additionalBirthday.ShowMonthDropdown = true"
+                                                           style="cursor: pointer; background-color: white;" />
+                                                    <button class="btn btn-outline-secondary" type="button" @onclick="() => additionalBirthday.ShowMonthDropdown = true">
+                                                        <i class="bi bi-calendar"></i>
+                                                    </button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control mb-2" @bind="additionalBirthday.MonthSearchQuery" @bind:event="oninput"
+                                                           placeholder="Search month..." @onfocusout="() => Task.Delay(200).ContinueWith(_ => additionalBirthday.ShowMonthDropdown = false)" />
+                                                    <div class="list-group position-absolute w-100" style="max-height: 300px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                                        @foreach (var month in GetFilteredMonths(additionalBirthday.MonthSearchQuery))
+                                                        {
+                                                            <button type="button" class="list-group-item list-group-item-action" 
+                                                                    @onclick="() => SelectMonth(additionalBirthday, month.Value)">
+                                                                @month.Name
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label fw-bold">Day <span class="text-danger">*</span></label>
+                                            <select class="form-select" @bind="additionalBirthday.BirthDay">
+                                                <option value="0">Select day...</option>
+                                                @for (int day = 1; day <= GetMaxDaysInMonth(additionalBirthday.BirthMonth, additionalBirthday.BirthYear); day++)
+                                                {
+                                                    <option value="@day">@day</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label fw-bold">Year <small class="text-muted">(optional)</small></label>
+                                            <input type="number" class="form-control" @bind="additionalBirthday.BirthYear" @bind:event="oninput"
+                                                   min="1900" max="@DateTime.Now.Year" placeholder="YYYY" />
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Custom Birthday Message <small class="text-muted">(optional)</small></label>
+                                        <textarea class="form-control" @bind="additionalBirthday.CustomMessage" rows="2"
+                                                  placeholder="e.g., 🎉 Happy Birthday {Name}! Wishing you an amazing day!"></textarea>
+                                        <div class="form-text">Use {Name} as placeholder for the person's name</div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Send Message To</label>
+                                        <select class="form-select" @bind="additionalBirthday.SendTo" @bind:after="() => OnSendToChanged(additionalBirthday)">
+                                            <option value="Contact">Send to this contact (@contactModel.Name)</option>
+                                            <option value="Group">Send to a WhatsApp group</option>
+                                        </select>
+                                    </div>
+
+                                    @if (additionalBirthday.SendTo == "Group")
+                                    {
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Select WhatsApp Group</label>
+                                            @if (!additionalBirthday.ShowGroupSearch)
+                                            {
+                                                <div class="d-flex gap-2 align-items-center">
+                                                    @if (!additionalBirthday.SendToGroupId.HasValue)
+                                                    {
+                                                        <div class="alert alert-info mb-0 flex-grow-1">
+                                                            <small>No group selected - click to search</small>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        var selectedGrp = availableGroups.FirstOrDefault(g => g.Id == additionalBirthday.SendToGroupId.Value);
+                                                        if (selectedGrp != null)
+                                                        {
+                                                            <div class="alert alert-success mb-0 flex-grow-1 d-flex justify-content-between align-items-center">
+                                                                <span>📢 <strong>@selectedGrp.Name</strong></span>
+                                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => { additionalBirthday.SendToGroupId = null; }">
+                                                                    <i class="bi bi-x"></i> Remove
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                    }
+                                                    <button type="button" class="btn btn-primary btn-sm" @onclick="() => additionalBirthday.ShowGroupSearch = true">
+                                                        <i class="bi bi-search"></i> @(additionalBirthday.SendToGroupId.HasValue ? "Change" : "Search")
+                                                    </button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="card">
+                                                    <div class="card-body">
+                                                        <div class="input-group mb-3">
+                                                            <input type="text" 
+                                                                   class="form-control" 
+                                                                   placeholder="Search for a group..." 
+                                                                   @bind="additionalBirthday.GroupSearchQuery"
+                                                                   @bind:event="oninput" />
+                                                            <button type="button" class="btn btn-outline-secondary" @onclick="() => { additionalBirthday.ShowGroupSearch = false; additionalBirthday.GroupSearchQuery = string.Empty; }">
+                                                                <i class="bi bi-x"></i> Cancel
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        <div class="list-group" style="max-height: 300px; overflow-y: auto;">
+                                                            @foreach (var group in GetFilteredGroupsForBirthday(additionalBirthday.GroupSearchQuery))
+                                                            {
+                                                                <button type="button" 
+                                                                        class="list-group-item list-group-item-action @(additionalBirthday.SendToGroupId == group.Id ? "active" : "")"
+                                                                        @onclick="() => { additionalBirthday.SendToGroupId = group.Id; additionalBirthday.ShowGroupSearch = false; additionalBirthday.GroupSearchQuery = string.Empty; }">
+                                                                    📢 @group.Name
+                                                                </button>
+                                                            }
+                                                            
+                                                            @if (!GetFilteredGroupsForBirthday(additionalBirthday.GroupSearchQuery).Any())
+                                                            {
+                                                                @if (!string.IsNullOrWhiteSpace(additionalBirthday.GroupSearchQuery))
+                                                                {
+                                                                    <div class="list-group-item text-muted">
+                                                                        <small>No groups found matching "@additionalBirthday.GroupSearchQuery"</small>
+                                                                    </div>
+                                                                }
+                                                                else if (!availableGroups.Any())
+                                                                {
+                                                                    <div class="list-group-item text-muted">
+                                                                        <small>No WhatsApp groups available. Sync your groups from <a href="/whatsapp/connect">WhatsApp Connect</a> first.</small>
+                                                                    </div>
+                                                                }
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Timezone <small class="text-muted">(optional)</small></label>
+                                            <select class="form-select" @bind="additionalBirthday.TimeZoneId">
+                                                <option value="">Use contact default (@(string.IsNullOrEmpty(contactModel.TimeZoneId) ? "UTC" : contactModel.TimeZoneId))</option>
+                                                @foreach (var tz in commonTimeZones)
+                                                {
+                                                    <option value="@tz.Id">@tz.DisplayName</option>
+                                                }
+                                            </select>
+                                            <div class="form-text">
+                                                <i class="bi bi-info-circle"></i> Timezone for sending this birthday message
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Message Time <small class="text-muted">(optional)</small></label>
+                                            <select class="form-select" @bind="additionalBirthday.MessageHour">
+                                                <option value="">Use contact default (@(contactModel.MessageHour == -1 ? "9:00 AM" : FormatHour(contactModel.MessageHour)))</option>
+                                                @for (int hour = 0; hour <= 23; hour++)
+                                                {
+                                                    <option value="@hour">@FormatHour(hour)</option>
+                                                }
+                                            </select>
+                                            <div class="form-text">
+                                                <i class="bi bi-info-circle"></i> Time to send this birthday message
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" @bind="additionalBirthday.IsEnabled" id="enabled_@index" />
+                                        <label class="form-check-label" for="enabled_@index">
+                                            Enable automatic birthday message for this person
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <button type="button" class="btn btn-outline-primary mb-4" @onclick="AddAdditionalBirthday">
+                            ➕ Add Another Birthday
+                        </button>
+
+                        <!-- Custom Events Section -->
+                        <h5 class="mb-3 mt-4">📅 Custom Events (Father's Day, Mother's Day, Anniversary, etc.)</h5>
+                        <div class="alert alert-info mb-3">
+                            <small>
+                                <strong>Tip:</strong> Add special events like Father's Day, Mother's Day, Anniversaries, or any other important dates.
+                                You can choose to send the message to this contact or to a WhatsApp group.
+                            </small>
+                        </div>
+
+                        @foreach (var (customEvent, index) in customEvents.Select((e, i) => (e, i)))
+                        {
+                            <div class="card mb-3 border-success">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">Event #@(index + 1)</h6>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveCustomEvent(index)">
+                                            🗑️ Remove
+                                        </button>
+                                    </div>
+
+                                    <!-- Event Type Selection -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Event Type</label>
+                                        <div class="btn-group w-100" role="group">
+                                            <input type="radio" class="btn-check" name="eventType_@index" id="custom_@index" 
+                                                   checked="@(!customEvent.IsRegionalEvent)"
+                                                   @onclick="() => SetEventTypeCustom(customEvent)" />
+                                            <label class="btn btn-outline-primary" for="custom_@index">
+                                                📝 Custom Date
+                                            </label>
+                                            
+                                            <input type="radio" class="btn-check" name="eventType_@index" id="regional_@index"
+                                                   checked="@customEvent.IsRegionalEvent"
+                                                   @onclick="() => SetEventTypeRegional(customEvent)" />
+                                            <label class="btn btn-outline-success" for="regional_@index">
+                                                🌍 Regional Event (Auto-calculates)
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    @if (customEvent.IsRegionalEvent)
+                                    {
+                                        <!-- Regional Event Selection -->
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Select Event <span class="text-danger">*</span></label>
+                                                <select class="form-select" @bind="customEvent.RegionalEventType" @bind:after="() => OnRegionalEventChanged(customEvent)">
+                                                    <option value="">-- Select an event --</option>
+                                                    @foreach (var eventType in availableRegionalEvents)
+                                                    {
+                                                        <option value="@eventType">@eventType</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold">Country/Region <span class="text-danger">*</span></label>
+                                                <select class="form-select" @bind="customEvent.RegionalEventCountryCode" @bind:after="() => OnRegionalCountryChanged(customEvent)" disabled="@(string.IsNullOrEmpty(customEvent.RegionalEventType))">
+                                                    <option value="">-- Select a country --</option>
+                                                    @if (!string.IsNullOrEmpty(customEvent.RegionalEventType))
+                                                    {
+                                                        @foreach (var countryInfo in GetCountriesForRegionalEvent(customEvent.RegionalEventType))
+                                                        {
+                                                            <option value="@countryInfo.CountryCode">@countryInfo.Country</option>
+                                                        }
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        @if (!string.IsNullOrEmpty(customEvent.RegionalEventType) && !string.IsNullOrEmpty(customEvent.RegionalEventCountryCode))
+                                        {
+                                            var nextDate = GetNextOccurrenceDate(customEvent);
+                                            if (nextDate.HasValue)
+                                            {
+                                                <div class="alert alert-success mb-3">
+                                                    <i class="bi bi-calendar-check"></i> <strong>Next occurrence:</strong> @nextDate.Value.ToString("MMMM d, yyyy") (@nextDate.Value.DayOfWeek)
+                                                </div>
+                                            }
+                                        }
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Event Name (Display) <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" @bind="customEvent.EventName" 
+                                                   placeholder="e.g., Dad's Father's Day" />
+                                            <div class="form-text">Friendly name for this event</div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <!-- Custom Date Entry -->
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Event Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" @bind="customEvent.EventName" 
+                                                   placeholder="e.g., Wedding Anniversary, Birthday Party" />
+                                        </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label fw-bold">Month <span class="text-danger">*</span></label>
+                                            @if (!customEvent.ShowMonthDropdown)
+                                            {
+                                                <div class="input-group">
+                                                    <input type="text" class="form-control" readonly
+                                                           value="@(customEvent.EventMonth > 0 ? GetMonthName(customEvent.EventMonth) : "Select month...")"
+                                                           @onclick="() => customEvent.ShowMonthDropdown = true"
+                                                           style="cursor: pointer; background-color: white;" />
+                                                    <button class="btn btn-outline-secondary" type="button" @onclick="() => customEvent.ShowMonthDropdown = true">
+                                                        <i class="bi bi-calendar"></i>
+                                                    </button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="position-relative">
+                                                    <input type="text" class="form-control mb-2" @bind="customEvent.MonthSearchQuery" @bind:event="oninput"
+                                                           placeholder="Search month..." @onfocusout="() => Task.Delay(200).ContinueWith(_ => customEvent.ShowMonthDropdown = false)" />
+                                                    <div class="list-group position-absolute w-100" style="max-height: 300px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                                        @foreach (var month in GetFilteredMonths(customEvent.MonthSearchQuery))
+                                                        {
+                                                            <button type="button" class="list-group-item list-group-item-action" 
+                                                                    @onclick="() => SelectEventMonth(customEvent, month.Value)">
+                                                                @month.Name
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label fw-bold">Day <span class="text-danger">*</span></label>
+                                            <select class="form-select" @bind="customEvent.EventDay">
+                                                <option value="0">Select day...</option>
+                                                @for (int day = 1; day <= GetMaxDaysInMonth(customEvent.EventMonth, customEvent.EventYear); day++)
+                                                {
+                                                    <option value="@day">@day</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label fw-bold">Year <small class="text-muted">(optional)</small></label>
+                                            <input type="number" class="form-control" @bind="customEvent.EventYear" @bind:event="oninput"
+                                                   min="1900" max="2100" placeholder="YYYY" />
+                                            <div class="form-text">
+                                                <small>Optional - useful for anniversaries where the year matters</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    }
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Custom Message <small class="text-muted">(optional)</small></label>
+                                        <textarea class="form-control" @bind="customEvent.CustomMessage" rows="2"
+                                                  placeholder="e.g., 🎉 Happy Father's Day! Thanks for being an amazing dad!"></textarea>
+                                        <div class="form-text">You can personalize the message for this event</div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Send Message To</label>
+                                        <select class="form-select" @bind="customEvent.SendTo" @bind:after="() => OnEventSendToChanged(customEvent)">
+                                            <option value="Contact">Send to this contact (@contactModel.Name)</option>
+                                            <option value="Group">Send to a WhatsApp group</option>
+                                        </select>
+                                    </div>
+
+                                    @if (customEvent.SendTo == "Group")
+                                    {
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Select WhatsApp Group</label>
+                                            @if (!customEvent.ShowGroupSearch)
+                                            {
+                                                <div class="d-flex gap-2 align-items-center">
+                                                    @if (!customEvent.SendToGroupId.HasValue)
+                                                    {
+                                                        <div class="alert alert-info mb-0 flex-grow-1">
+                                                            <small>No group selected - click to search</small>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        var selectedGrp = availableGroups.FirstOrDefault(g => g.Id == customEvent.SendToGroupId.Value);
+                                                        if (selectedGrp != null)
+                                                        {
+                                                            <div class="alert alert-success mb-0 flex-grow-1 d-flex justify-content-between align-items-center">
+                                                                <span>📢 <strong>@selectedGrp.Name</strong></span>
+                                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => { customEvent.SendToGroupId = null; }">
+                                                                    <i class="bi bi-x"></i> Remove
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                    }
+                                                    <button type="button" class="btn btn-primary btn-sm" @onclick="() => customEvent.ShowGroupSearch = true">
+                                                        <i class="bi bi-search"></i> @(customEvent.SendToGroupId.HasValue ? "Change" : "Search")
+                                                    </button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="card">
+                                                    <div class="card-body">
+                                                        <div class="input-group mb-3">
+                                                            <input type="text" 
+                                                                   class="form-control" 
+                                                                   placeholder="Search for a group..." 
+                                                                   @bind="customEvent.GroupSearchQuery"
+                                                                   @bind:event="oninput" />
+                                                            <button type="button" class="btn btn-outline-secondary" @onclick="() => { customEvent.ShowGroupSearch = false; customEvent.GroupSearchQuery = string.Empty; }">
+                                                                <i class="bi bi-x"></i> Cancel
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        <div class="list-group" style="max-height: 300px; overflow-y: auto;">
+                                                            @foreach (var group in GetFilteredGroupsForEvent(customEvent.GroupSearchQuery))
+                                                            {
+                                                                <button type="button" 
+                                                                        class="list-group-item list-group-item-action @(customEvent.SendToGroupId == group.Id ? "active" : "")"
+                                                                        @onclick="() => { customEvent.SendToGroupId = group.Id; customEvent.ShowGroupSearch = false; customEvent.GroupSearchQuery = string.Empty; }">
+                                                                    <div class="d-flex justify-content-between align-items-center">
+                                                                        <div>
+                                                                            <strong>@group.Name</strong>
+                                                                            @if (!string.IsNullOrEmpty(group.Notes))
+                                                                            {
+                                                                                <br/><small class="text-muted">@group.Notes</small>
+                                                                            }
+                                                                        </div>
+                                                                        @if (customEvent.SendToGroupId == group.Id)
+                                                                        {
+                                                                            <span class="badge bg-primary">Selected</span>
+                                                                        }
+                                                                    </div>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Timezone <small class="text-muted">(optional)</small></label>
+                                            <select class="form-select" @bind="customEvent.TimeZoneId">
+                                                <option value="">Use contact default (@(string.IsNullOrEmpty(contactModel.TimeZoneId) ? "UTC" : contactModel.TimeZoneId))</option>
+                                                @foreach (var tz in commonTimeZones)
+                                                {
+                                                    <option value="@tz.Id">@tz.DisplayName</option>
+                                                }
+                                            </select>
+                                            <div class="form-text">
+                                                <i class="bi bi-info-circle"></i> Timezone for sending this event message
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">Message Time <small class="text-muted">(optional)</small></label>
+                                            <select class="form-select" @bind="customEvent.MessageHour">
+                                                <option value="">Use contact default (@(contactModel.MessageHour == -1 ? "9:00 AM" : FormatHour(contactModel.MessageHour)))</option>
+                                                @for (int hour = 0; hour <= 23; hour++)
+                                                {
+                                                    <option value="@hour">@FormatHour(hour)</option>
+                                                }
+                                            </select>
+                                            <div class="form-text">
+                                                <i class="bi bi-info-circle"></i> Time to send this event message
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" @bind="customEvent.IsEnabled" 
+                                               id="eventEnabled_@index">
+                                        <label class="form-check-label" for="eventEnabled_@index">
+                                            Enable automatic message for this event
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <button type="button" class="btn btn-outline-success mb-4" @onclick="AddCustomEvent">
+                            ➕ Add Custom Event
+                        </button>
+
+                        <!-- Timezone Settings -->
+                        <h5 class="mb-3">⏰ Notification Settings</h5>
+
+                        @if (!string.IsNullOrEmpty(userDefaultTimezone))
+                        {
+                            <div class="alert alert-info mb-3">
+                                <strong>Default:</strong> Using your timezone (@userDefaultTimezone) at @FormatHour(userDefaultHour)
+                                <br/>
+                                <small>Override below if this contact is in a different timezone.</small>
+                            </div>
+                        }
+
+                        <div class="row mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold">Timezone <small class="text-muted">(optional - uses your default)</small></label>
+                                <InputSelect class="form-select" @bind-Value="contactModel.TimeZoneId">
+                                    <option value="">Use my default (@(userDefaultTimezone ?? "UTC"))</option>
+                                    @foreach (var tz in commonTimeZones)
+                                    {
+                                        <option value="@tz.Id">@tz.DisplayName</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Send Time <small class="text-muted">(optional)</small></label>
+                                <InputSelect class="form-select" @bind-Value="contactModel.MessageHour">
+                                    <option value="-1">Use my default (@FormatHour(userDefaultHour))</option>
+                                    @for (int hour = 0; hour < 24; hour++)
+                                    {
+                                        <option value="@hour">@FormatHour(hour)</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" @bind-Value="contactModel.IsEnabled" id="enabledCheck" />
+                                <label class="form-check-label" for="enabledCheck">
+                                    Enable automatic birthday wishes
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Notes <small class="text-muted">(optional)</small></label>
+                            <InputTextArea class="form-control" @bind-Value="contactModel.Notes" rows="2" 
+                                placeholder="Any additional notes about this contact..." />
+                            <ValidationMessage For="@(() => contactModel.Notes)" />
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <span>💾 Save Contact</span>
+                                }
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg" @onclick="Cancel" disabled="@isSaving">
+                                Cancel
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private class ContactFormModel
+    {
+        [Required(ErrorMessage = "Name is required")]
+        [StringLength(200, ErrorMessage = "Name cannot be longer than 200 characters")]
+        public string Name { get; set; } = "";
+
+        [Required(ErrorMessage = "Phone number is required")]
+        [Phone(ErrorMessage = "Please enter a valid phone number")]
+        [StringLength(20, ErrorMessage = "Phone number cannot be longer than 20 characters")]
+        public string PhoneNumber { get; set; } = "";
+
+        [StringLength(100, ErrorMessage = "Display name cannot be longer than 100 characters")]
+        public string? DisplayName { get; set; }
+
+        [EmailAddress(ErrorMessage = "Please enter a valid email address")]
+        [StringLength(200, ErrorMessage = "Email cannot be longer than 200 characters")]
+        public string? Email { get; set; }
+
+        [Range(1, 12, ErrorMessage = "Please select a valid month")]
+        public int BirthMonth { get; set; }
+
+        [Range(1, 31, ErrorMessage = "Please enter a valid day (1-31)")]
+        public int BirthDay { get; set; }
+
+        [Range(1900, 3000, ErrorMessage = "Please enter a valid year")]
+        public int? BirthYear { get; set; }
+
+        [StringLength(500, ErrorMessage = "Custom message cannot be longer than 500 characters")]
+        public string? CustomMessage { get; set; }
+
+        [StringLength(100, ErrorMessage = "Group ID cannot be longer than 100 characters")]
+        public string? SendToGroupId { get; set; }
+
+        public string? TimeZoneId { get; set; }
+        
+        public int MessageHour { get; set; } = -1;
+
+        public bool IsEnabled { get; set; } = true;
+
+        [StringLength(1000, ErrorMessage = "Notes cannot be longer than 1000 characters")]
+        public string? Notes { get; set; }
+    }
+
+    private class TimeZoneOption
+    {
+        public string Id { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+    }
+
+    private ContactFormModel contactModel = new();
+    private bool isSaving = false;
+    private string errorMessage = "";
+    private string? userId;
+    private string userDefaultTimezone = "";
+    private int userDefaultHour = 9;
+    private List<Contact> availableGroups = new();
+    private List<Contact> filteredGroups = new();
+    private Contact? selectedGroup = null;
+    private bool showGroupSearch = false;
+    private string groupSearchQuery = "";
+    private List<AdditionalBirthdayModel> additionalBirthdays = new();
+    private List<CustomEventModel> customEvents = new();
+    
+    // Regional events
+    private RegionalEventsService? regionalEventsService;
+    private List<string> availableRegionalEvents = new();
+
+    private class AdditionalBirthdayModel
+    {
+        public string Name { get; set; } = "";
+        public string? Relationship { get; set; }
+        public int BirthMonth { get; set; }
+        public int BirthDay { get; set; }
+        public int? BirthYear { get; set; }
+        public string? CustomMessage { get; set; }
+        public string SendTo { get; set; } = "Contact";
+        public int? SendToGroupId { get; set; }
+        public string? TimeZoneId { get; set; }
+        public int? MessageHour { get; set; }
+        public bool IsEnabled { get; set; } = true;
+        
+        // UI state properties
+        public bool ShowMonthDropdown { get; set; } = false;
+        public string MonthSearchQuery { get; set; } = "";
+        public bool ShowGroupSearch { get; set; } = false;
+        public string GroupSearchQuery { get; set; } = "";
+    }
+
+    private class CustomEventModel
+    {
+        public string EventName { get; set; } = "";
+        public int EventMonth { get; set; }
+        public int EventDay { get; set; }
+        public int? EventYear { get; set; }
+        public string? CustomMessage { get; set; }
+        public string SendTo { get; set; } = "Contact";
+        public int? SendToGroupId { get; set; }
+        public string? TimeZoneId { get; set; }
+        public int? MessageHour { get; set; }
+        public bool IsEnabled { get; set; } = true;
+        
+        // Regional event properties
+        public bool IsRegionalEvent { get; set; } = false;
+        public string? RegionalEventType { get; set; }
+        public string? RegionalEventCountryCode { get; set; }
+        
+        // UI state properties
+        public bool ShowMonthDropdown { get; set; } = false;
+        public string MonthSearchQuery { get; set; } = "";
+        public bool ShowGroupSearch { get; set; } = false;
+        public string GroupSearchQuery { get; set; } = "";
+    }
+
+    private List<TimeZoneOption> commonTimeZones = new()
+    {
+        new() { Id = "Europe/Dublin", DisplayName = "🇮🇪 Ireland (Dublin) - GMT/IST" },
+        new() { Id = "Europe/London", DisplayName = "🇬🇧 United Kingdom (London) - GMT/BST" },
+        new() { Id = "Europe/Paris", DisplayName = "🇫🇷 France (Paris) - CET/CEST" },
+        new() { Id = "Europe/Berlin", DisplayName = "🇩🇪 Germany (Berlin) - CET/CEST" },
+        new() { Id = "Europe/Madrid", DisplayName = "🇪🇸 Spain (Madrid) - CET/CEST" },
+        new() { Id = "America/New_York", DisplayName = "🇺🇸 USA East (New York) - EST/EDT" },
+        new() { Id = "America/Chicago", DisplayName = "🇺🇸 USA Central (Chicago) - CST/CDT" },
+        new() { Id = "America/Los_Angeles", DisplayName = "🇺🇸 USA West (Los Angeles) - PST/PDT" },
+        new() { Id = "America/Toronto", DisplayName = "🇨🇦 Canada (Toronto) - EST/EDT" },
+        new() { Id = "Australia/Sydney", DisplayName = "🇦🇺 Australia (Sydney) - AEST/AEDT" },
+        new() { Id = "Asia/Tokyo", DisplayName = "🇯🇵 Japan (Tokyo) - JST" },
+        new() { Id = "Asia/Dubai", DisplayName = "🇦🇪 UAE (Dubai) - GST" },
+        new() { Id = "Asia/Singapore", DisplayName = "🇸🇬 Singapore - SGT" },
+        new() { Id = "Asia/Kolkata", DisplayName = "🇮🇳 India (Kolkata) - IST" },
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var applicationUser = await UserManager.GetUserAsync(user);
+        if (applicationUser != null)
+        {
+            userId = applicationUser.Id;
+            userDefaultTimezone = applicationUser.DefaultTimeZoneId ?? "";
+            userDefaultHour = applicationUser.DefaultMessageHour;
+            
+            // Load available WhatsApp groups
+            availableGroups = await DbContext.Contacts
+                .Where(c => c.UserId == userId && c.IsGroup == true)
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+            
+            filteredGroups = availableGroups;
+            
+            // Initialize regional events service
+            regionalEventsService = RegionalEventsService;
+            availableRegionalEvents = regionalEventsService.GetEventTypes();
+        }
+    }
+
+    private async Task SaveContact()
+    {
+        if (string.IsNullOrEmpty(userId)) return;
+
+        isSaving = true;
+        errorMessage = "";
+
+        try
+        {
+            // Validate birthday date
+            try
+            {
+                var year = contactModel.BirthYear ?? 1; // Use year 1 if not provided (just month/day)
+                var birthDate = new DateTime(year, contactModel.BirthMonth, contactModel.BirthDay);
+                
+                // Determine timezone and hour
+                var timezoneToUse = string.IsNullOrWhiteSpace(contactModel.TimeZoneId) 
+                    ? userDefaultTimezone 
+                    : contactModel.TimeZoneId;
+                
+                var hourToUse = contactModel.MessageHour == -1 
+                    ? userDefaultHour 
+                    : contactModel.MessageHour;
+
+                // Create Contact
+                var contact = new Contact
+                {
+                    UserId = userId,
+                    Name = contactModel.Name.Trim(),
+                    DisplayName = string.IsNullOrWhiteSpace(contactModel.DisplayName) ? null : contactModel.DisplayName.Trim(),
+                    PhoneNumber = contactModel.PhoneNumber.Trim(),
+                    Email = string.IsNullOrWhiteSpace(contactModel.Email) ? null : contactModel.Email.Trim(),
+                    Notes = string.IsNullOrWhiteSpace(contactModel.Notes) ? null : contactModel.Notes.Trim(),
+                    TimeZoneId = string.IsNullOrWhiteSpace(timezoneToUse) ? null : timezoneToUse,
+                    PreferredMessageHour = hourToUse,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Check for duplicate
+                var exists = await DbContext.Contacts
+                    .AnyAsync(c => c.UserId == userId && c.PhoneNumber == contact.PhoneNumber);
+                
+                if (exists)
+                {
+                    errorMessage = "A contact with this phone number already exists.";
+                    return;
+                }
+
+                DbContext.Contacts.Add(contact);
+                await DbContext.SaveChangesAsync();
+
+                // Create Birthday
+                var birthday = new Birthday
+                {
+                    ContactId = contact.Id,
+                    BirthDate = birthDate,
+                    CustomMessage = string.IsNullOrWhiteSpace(contactModel.CustomMessage) 
+                        ? null 
+                        : contactModel.CustomMessage.Trim(),
+                    SendToGroupId = string.IsNullOrWhiteSpace(contactModel.SendToGroupId) 
+                        ? null 
+                        : contactModel.SendToGroupId.Trim(),
+                    IsEnabled = contactModel.IsEnabled,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                DbContext.Birthdays.Add(birthday);
+                await DbContext.SaveChangesAsync();
+
+                // Save Additional Birthdays
+                foreach (var additionalBirthday in additionalBirthdays)
+                {
+                    // Validate the additional birthday
+                    if (string.IsNullOrWhiteSpace(additionalBirthday.Name) || 
+                        additionalBirthday.BirthMonth < 1 || additionalBirthday.BirthMonth > 12 ||
+                        additionalBirthday.BirthDay < 1 || additionalBirthday.BirthDay > 31)
+                    {
+                        continue; // Skip invalid entries
+                    }
+
+                    // Validate date
+                    try
+                    {
+                        var testYear = additionalBirthday.BirthYear ?? 2000;
+                        var testDate = new DateTime(testYear, additionalBirthday.BirthMonth, additionalBirthday.BirthDay);
+                    }
+                    catch
+                    {
+                        continue; // Skip invalid dates
+                    }
+
+                    var additionalBirthdayEntity = new HBDrop.WebApp.Models.AdditionalBirthday
+                    {
+                        ContactId = contact.Id,
+                        Name = additionalBirthday.Name.Trim(),
+                        Relationship = string.IsNullOrWhiteSpace(additionalBirthday.Relationship) 
+                            ? null 
+                            : additionalBirthday.Relationship.Trim(),
+                        BirthMonth = additionalBirthday.BirthMonth,
+                        BirthDay = additionalBirthday.BirthDay,
+                        BirthYear = additionalBirthday.BirthYear,
+                        CustomMessage = string.IsNullOrWhiteSpace(additionalBirthday.CustomMessage) 
+                            ? null 
+                            : additionalBirthday.CustomMessage.Trim(),
+                        SendTo = additionalBirthday.SendTo,
+                        SendToGroupId = additionalBirthday.SendToGroupId,
+                        TimeZoneId = string.IsNullOrWhiteSpace(additionalBirthday.TimeZoneId) ? timezoneToUse : additionalBirthday.TimeZoneId,
+                        MessageHour = additionalBirthday.MessageHour ?? hourToUse,
+                        IsEnabled = additionalBirthday.IsEnabled,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    DbContext.AdditionalBirthdays.Add(additionalBirthdayEntity);
+                }
+
+                await DbContext.SaveChangesAsync();
+
+                // Save Custom Events
+                foreach (var customEvent in customEvents)
+                {
+                    // Validate the custom event
+                    if (string.IsNullOrWhiteSpace(customEvent.EventName))
+                    {
+                        continue; // Skip if no event name
+                    }
+
+                    // For regional events, recalculate the date
+                    if (customEvent.IsRegionalEvent)
+                    {
+                        if (string.IsNullOrEmpty(customEvent.RegionalEventType) || 
+                            string.IsNullOrEmpty(customEvent.RegionalEventCountryCode))
+                        {
+                            continue; // Skip incomplete regional events
+                        }
+                        
+                        // Recalculate the date to ensure it's current
+                        var eventDate = regionalEventsService?.CalculateEventDate(
+                            customEvent.RegionalEventType, 
+                            customEvent.RegionalEventCountryCode, 
+                            DateTime.Now.Year);
+                            
+                        if (eventDate.HasValue && eventDate.Value < DateTime.Now)
+                        {
+                            eventDate = regionalEventsService?.CalculateEventDate(
+                                customEvent.RegionalEventType, 
+                                customEvent.RegionalEventCountryCode, 
+                                DateTime.Now.Year + 1);
+                        }
+                        
+                        if (eventDate.HasValue)
+                        {
+                            customEvent.EventMonth = eventDate.Value.Month;
+                            customEvent.EventDay = eventDate.Value.Day;
+                        }
+                        else
+                        {
+                            continue; // Skip if date calculation failed
+                        }
+                    }
+                    else
+                    {
+                        // For custom dates, validate month/day
+                        if (customEvent.EventMonth < 1 || customEvent.EventMonth > 12 ||
+                            customEvent.EventDay < 1 || customEvent.EventDay > 31)
+                        {
+                            continue; // Skip invalid entries
+                        }
+
+                        // Validate date
+                        try
+                        {
+                            var testYear = customEvent.EventYear ?? 2000;
+                            var testDate = new DateTime(testYear, customEvent.EventMonth, customEvent.EventDay);
+                        }
+                        catch
+                        {
+                            continue; // Skip invalid dates
+                        }
+                    }
+
+                    var customEventEntity = new HBDrop.WebApp.Models.CustomEvent
+                    {
+                        ContactId = contact.Id,
+                        EventName = customEvent.EventName.Trim(),
+                        EventMonth = customEvent.EventMonth,
+                        EventDay = customEvent.EventDay,
+                        EventYear = customEvent.EventYear,
+                        CustomMessage = string.IsNullOrWhiteSpace(customEvent.CustomMessage) 
+                            ? null 
+                            : customEvent.CustomMessage.Trim(),
+                        GroupId = customEvent.SendTo == "Group" ? customEvent.SendToGroupId : null,
+                        TimeZoneId = string.IsNullOrWhiteSpace(customEvent.TimeZoneId) ? timezoneToUse : customEvent.TimeZoneId,
+                        MessageHour = customEvent.MessageHour ?? hourToUse,
+                        IsRegionalEvent = customEvent.IsRegionalEvent,
+                        RegionalEventType = customEvent.IsRegionalEvent ? customEvent.RegionalEventType : null,
+                        RegionalEventCountryCode = customEvent.IsRegionalEvent ? customEvent.RegionalEventCountryCode : null,
+                        IsEnabled = customEvent.IsEnabled,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    DbContext.CustomEvents.Add(customEventEntity);
+                }
+
+                await DbContext.SaveChangesAsync();
+
+                // Redirect to contacts list
+                Navigation.NavigateTo("/contacts");
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                errorMessage = "Invalid date. Please check the month, day, and year values.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred while saving: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/contacts");
+    }
+
+    private void AddAdditionalBirthday()
+    {
+        additionalBirthdays.Add(new AdditionalBirthdayModel
+        {
+            SendTo = "Contact",
+            IsEnabled = true
+        });
+    }
+
+    private void RemoveAdditionalBirthday(int index)
+    {
+        if (index >= 0 && index < additionalBirthdays.Count)
+        {
+            additionalBirthdays.RemoveAt(index);
+        }
+    }
+
+    private void OnSendToChanged(AdditionalBirthdayModel birthday)
+    {
+        if (birthday.SendTo == "Contact")
+        {
+            birthday.SendToGroupId = null;
+        }
+    }
+
+    // Custom Events methods
+    private void AddCustomEvent()
+    {
+        customEvents.Add(new CustomEventModel
+        {
+            SendTo = "Contact",
+            IsEnabled = true
+        });
+    }
+
+    private void RemoveCustomEvent(int index)
+    {
+        if (index >= 0 && index < customEvents.Count)
+        {
+            customEvents.RemoveAt(index);
+        }
+    }
+
+    private void OnEventSendToChanged(CustomEventModel customEvent)
+    {
+        if (customEvent.SendTo == "Contact")
+        {
+            customEvent.SendToGroupId = null;
+        }
+    }
+
+    private void SelectEventMonth(CustomEventModel customEvent, int month)
+    {
+        customEvent.EventMonth = month;
+        customEvent.ShowMonthDropdown = false;
+        customEvent.MonthSearchQuery = "";
+    }
+
+    private IEnumerable<Contact> GetFilteredGroupsForEvent(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return availableGroups;
+
+        return availableGroups.Where(g =>
+            g.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            (g.Notes != null && g.Notes.Contains(query, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    // Regional Events methods
+    private void SetEventTypeCustom(CustomEventModel customEvent)
+    {
+        customEvent.IsRegionalEvent = false;
+        customEvent.RegionalEventType = null;
+        customEvent.RegionalEventCountryCode = null;
+    }
+
+    private void SetEventTypeRegional(CustomEventModel customEvent)
+    {
+        customEvent.IsRegionalEvent = true;
+        // Clear manual date fields
+        customEvent.EventMonth = 0;
+        customEvent.EventDay = 0;
+        customEvent.EventYear = null;
+    }
+
+    private void OnRegionalEventChanged(CustomEventModel customEvent)
+    {
+        // Reset country when event type changes
+        customEvent.RegionalEventCountryCode = null;
+        
+        // Try to auto-select country based on timezone if available
+        if (!string.IsNullOrEmpty(customEvent.RegionalEventType) && regionalEventsService != null)
+        {
+            var countryCode = regionalEventsService.GetCountryCodeFromTimezone(contactModel.TimeZoneId ?? userDefaultTimezone);
+            if (!string.IsNullOrEmpty(countryCode))
+            {
+                var countries = regionalEventsService.GetCountriesForEvent(customEvent.RegionalEventType);
+                if (countries.Any(c => c.CountryCode == countryCode))
+                {
+                    customEvent.RegionalEventCountryCode = countryCode;
+                }
+            }
+        }
+    }
+
+    private void OnRegionalCountryChanged(CustomEventModel customEvent)
+    {
+        // Calculate and populate the date when country is selected
+        if (!string.IsNullOrEmpty(customEvent.RegionalEventType) && 
+            !string.IsNullOrEmpty(customEvent.RegionalEventCountryCode) &&
+            regionalEventsService != null)
+        {
+            var nextDate = regionalEventsService.CalculateEventDate(
+                customEvent.RegionalEventType, 
+                customEvent.RegionalEventCountryCode, 
+                DateTime.Now.Year);
+                
+            if (nextDate.HasValue)
+            {
+                // If the date has already passed this year, calculate for next year
+                if (nextDate.Value < DateTime.Now)
+                {
+                    nextDate = regionalEventsService.CalculateEventDate(
+                        customEvent.RegionalEventType, 
+                        customEvent.RegionalEventCountryCode, 
+                        DateTime.Now.Year + 1);
+                }
+                
+                if (nextDate.HasValue)
+                {
+                    customEvent.EventMonth = nextDate.Value.Month;
+                    customEvent.EventDay = nextDate.Value.Day;
+                    customEvent.EventYear = null; // Leave year null for recurring events
+                }
+            }
+        }
+    }
+
+    private class CountryInfo
+    {
+        public string Country { get; set; }
+        public string CountryCode { get; set; }
+    }
+
+    private List<CountryInfo> GetCountriesForRegionalEvent(string eventName)
+    {
+        if (string.IsNullOrEmpty(eventName) || regionalEventsService == null)
+            return new List<CountryInfo>();
+            
+        return regionalEventsService.GetCountriesForEvent(eventName)
+            .Select(x => new CountryInfo { Country = x.Country, CountryCode = x.CountryCode })
+            .ToList();
+    }
+
+    private DateTime? GetNextOccurrenceDate(CustomEventModel customEvent)
+    {
+        if (string.IsNullOrEmpty(customEvent.RegionalEventType) || 
+            string.IsNullOrEmpty(customEvent.RegionalEventCountryCode) ||
+            regionalEventsService == null)
+            return null;
+
+        var nextDate = regionalEventsService.CalculateEventDate(
+            customEvent.RegionalEventType, 
+            customEvent.RegionalEventCountryCode, 
+            DateTime.Now.Year);
+
+        if (nextDate.HasValue && nextDate.Value < DateTime.Now)
+        {
+            nextDate = regionalEventsService.CalculateEventDate(
+                customEvent.RegionalEventType, 
+                customEvent.RegionalEventCountryCode, 
+                DateTime.Now.Year + 1);
+        }
+
+        return nextDate;
+    }
+
+    private string GetMonthName(int month)
+    {
+        return month switch
+        {
+            1 => "January",
+            2 => "February",
+            3 => "March",
+            4 => "April",
+            5 => "May",
+            6 => "June",
+            7 => "July",
+            8 => "August",
+            9 => "September",
+            10 => "October",
+            11 => "November",
+            12 => "December",
+            _ => "Select month..."
+        };
+    }
+
+    private List<(int Value, string Name)> GetFilteredMonths(string searchQuery)
+    {
+        var months = new List<(int Value, string Name)>
+        {
+            (1, "January"), (2, "February"), (3, "March"), (4, "April"),
+            (5, "May"), (6, "June"), (7, "July"), (8, "August"),
+            (9, "September"), (10, "October"), (11, "November"), (12, "December")
+        };
+
+        if (string.IsNullOrWhiteSpace(searchQuery))
+            return months;
+
+        return months.Where(m => m.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private void SelectMonth(AdditionalBirthdayModel birthday, int month)
+    {
+        birthday.BirthMonth = month;
+        birthday.ShowMonthDropdown = false;
+        birthday.MonthSearchQuery = "";
+        
+        // Validate the day is still valid for the new month
+        int maxDays = GetMaxDaysInMonth(birthday.BirthMonth, birthday.BirthYear);
+        if (birthday.BirthDay > maxDays)
+        {
+            birthday.BirthDay = maxDays;
+        }
+    }
+
+    private List<Contact> GetFilteredGroupsForBirthday(string searchQuery)
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+            return availableGroups;
+
+        return availableGroups.Where(g => g.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private int GetMaxDaysInMonth(int month, int? year)
+    {
+        if (month < 1 || month > 12) return 31;
+        
+        int yearToUse = year ?? 2000; // Use a leap year as default
+        try
+        {
+            return DateTime.DaysInMonth(yearToUse, month);
+        }
+        catch
+        {
+            return 31;
+        }
+    }
+
+    private string FormatHour(int hour)
+    {
+        if (hour == 0) return "12:00 AM";
+        if (hour == 12) return "12:00 PM";
+        if (hour < 12) return $"{hour}:00 AM";
+        return $"{hour - 12}:00 PM";
+    }
+
+    private void FilterGroups()
+    {
+        if (string.IsNullOrWhiteSpace(groupSearchQuery))
+        {
+            filteredGroups = availableGroups;
+        }
+        else
+        {
+            filteredGroups = availableGroups
+                .Where(g => g.Name.Contains(groupSearchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private void SelectGroup(Contact? group)
+    {
+        selectedGroup = group;
+        contactModel.SendToGroupId = group?.GroupId;
+        showGroupSearch = false;
+        groupSearchQuery = "";
+        filteredGroups = availableGroups;
+    }
+
+    private void ClearGroupSearch()
+    {
+        showGroupSearch = false;
+        groupSearchQuery = "";
+        filteredGroups = availableGroups;
+    }
+}

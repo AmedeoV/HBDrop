@@ -1,0 +1,122 @@
+/* Import Contacts Page Styles */
+
+.import-container {
+    padding: 2rem 0;
+}
+
+.export-guide {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    height: 100%;
+}
+
+.export-guide h6 {
+    color: #ff6b9d;
+    margin-bottom: 1rem;
+}
+
+.export-steps {
+    margin-bottom: 0;
+    padding-left: 1.25rem;
+}
+
+.export-steps li {
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.upload-area {
+    border: 2px dashed #98d8c8;
+    border-radius: 12px;
+    padding: 3rem 2rem;
+    text-align: center;
+    background: #f8fffe;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: #ff6b9d;
+    background: #fff5f9;
+}
+
+.upload-label {
+    display: block;
+    cursor: pointer;
+    margin: 0;
+}
+
+.upload-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.success-icon-large {
+    font-size: 5rem;
+    animation: successBounce 0.6s ease;
+}
+
+@keyframes successBounce {
+    0% { transform: scale(0); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.badge {
+    font-size: 0.85rem;
+    padding: 0.35rem 0.65rem;
+}
+
+/* Card Styling */
+.card {
+    border: none;
+    border-radius: 12px;
+}
+
+.card-body {
+    border-radius: 12px;
+}
+
+/* Button Styling */
+.btn-primary {
+    background: linear-gradient(135deg, #ff6b9d 0%, #ffa07a 100%);
+    border: none;
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #ff5588 0%, #ff8f6a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 107, 157, 0.4);
+}
+
+.btn-outline-primary {
+    border-color: #ff6b9d;
+    color: #ff6b9d;
+}
+
+.btn-outline-primary:hover {
+    background-color: #ff6b9d;
+    border-color: #ff6b9d;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .import-container {
+        padding: 1rem 0;
+    }
+    
+    .export-guide {
+        margin-bottom: 1rem;
+    }
+    
+    .upload-area {
+        padding: 2rem 1rem;
+    }
+}

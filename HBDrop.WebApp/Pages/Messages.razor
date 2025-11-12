@@ -1,0 +1,307 @@
+@page "/messages"
+@using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+
+<PageTitle>Message History - HBDrop</PageTitle>
+
+<div class="messages-container">
+    <div class="messages-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="page-title">
+                    <i class="bi bi-chat-dots"></i> Message History
+                </h1>
+                <p class="text-muted">View all your sent WhatsApp messages</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-outline-primary" @onclick="RefreshMessages">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-spinner text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Loading messages...</p>
+        </div>
+    }
+    else if (messages == null || !messages.Any())
+    {
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3>No messages yet</h3>
+            <p class="text-muted">Your message history will appear here once you start sending birthday wishes!</p>
+            <a href="/dashboard" class="btn btn-primary mt-3">
+                <i class="bi bi-house"></i> Back to Dashboard
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="messages-stats mb-4">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="stat-box stat-total">
+                        <div class="stat-icon"><i class="bi bi-chat-dots"></i></div>
+                        <div class="stat-info">
+                            <h4>@messages.Count</h4>
+                            <p>Total Messages</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-box stat-sent">
+                        <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
+                        <div class="stat-info">
+                            <h4>@messages.Count(m => m.Status == MessageStatus.Sent || m.Status == MessageStatus.Delivered || m.Status == MessageStatus.Read)</h4>
+                            <p>Sent Successfully</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-box stat-failed">
+                        <div class="stat-icon"><i class="bi bi-x-circle"></i></div>
+                        <div class="stat-info">
+                            <h4>@messages.Count(m => m.Status == MessageStatus.Failed)</h4>
+                            <p>Failed</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-box stat-birthday">
+                        <div class="stat-icon"><i class="bi bi-gift"></i></div>
+                        <div class="stat-info">
+                            <h4>@messages.Count(m => m.IsBirthdayMessage)</h4>
+                            <p>Birthday Messages</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="messages-filters mb-3">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <select class="form-select" @bind="filterStatus" @bind:after="ApplyFilters">
+                        <option value="">All Statuses</option>
+                        <option value="Sent">Sent</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Read">Read</option>
+                        <option value="Failed">Failed</option>
+                        <option value="Pending">Pending</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select" @bind="filterType" @bind:after="ApplyFilters">
+                        <option value="">All Types</option>
+                        <option value="birthday">Birthday Messages</option>
+                        <option value="manual">Manual Messages</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" class="form-control" placeholder="Search by contact name..." 
+                           @bind="searchText" @bind:after="ApplyFilters" />
+                </div>
+            </div>
+        </div>
+
+        <div class="messages-list">
+            @foreach (var message in filteredMessages)
+            {
+                <div class="message-card @GetMessageStatusClass(message.Status)">
+                    <div class="message-header">
+                        <div class="message-contact">
+                            <div class="contact-avatar">
+                                @if (message.Contact.IsGroup)
+                                {
+                                    <i class="bi bi-people-fill"></i>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-person-fill"></i>
+                                }
+                            </div>
+                            <div class="contact-info">
+                                <h5 class="mb-0">@message.Contact.Name</h5>
+                                <small class="text-muted">@message.Contact.PhoneNumber</small>
+                            </div>
+                        </div>
+                        <div class="message-status">
+                            <span class="status-badge status-@message.Status.ToString().ToLower()">
+                                @GetStatusIcon(message.Status) @message.Status
+                            </span>
+                            @if (message.IsBirthdayMessage)
+                            {
+                                <span class="badge bg-info ms-2">
+                                    <i class="bi bi-gift"></i> Birthday
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    <div class="message-content">
+                        <p class="mb-2">@message.Content</p>
+                    </div>
+                    <div class="message-footer">
+                        <div class="message-dates">
+                            <small class="text-muted">
+                                <i class="bi bi-clock"></i> Created: @message.CreatedAt.ToLocalTime().ToString("MMM dd, yyyy hh:mm tt")
+                            </small>
+                            @if (message.SentAt.HasValue)
+                            {
+                                <small class="text-muted ms-3">
+                                    <i class="bi bi-send"></i> Sent: @message.SentAt.Value.ToLocalTime().ToString("MMM dd, yyyy hh:mm tt")
+                                </small>
+                            }
+                            @if (message.DeliveredAt.HasValue)
+                            {
+                                <small class="text-muted ms-3">
+                                    <i class="bi bi-check2-all"></i> Delivered: @message.DeliveredAt.Value.ToLocalTime().ToString("MMM dd, yyyy hh:mm tt")
+                                </small>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(message.ErrorMessage))
+                        {
+                            <div class="alert alert-danger alert-sm mt-2 mb-0">
+                                <i class="bi bi-exclamation-triangle"></i> @message.ErrorMessage
+                                @if (message.RetryCount > 0)
+                                {
+                                    <span class="ms-2">(Retry @message.RetryCount/@Message.MaxRetryAttempts)</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Message> messages = new();
+    private List<Message> filteredMessages = new();
+    private bool isLoading = true;
+    private string filterStatus = "";
+    private string filterType = "";
+    private string searchText = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        await LoadMessages();
+    }
+
+    private async Task LoadMessages()
+    {
+        isLoading = true;
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                messages = await DbContext.Messages
+                    .Include(m => m.Contact)
+                    .Where(m => m.UserId == userId)
+                    .OrderByDescending(m => m.CreatedAt)
+                    .ToListAsync();
+
+                ApplyFilters();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading messages: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshMessages()
+    {
+        await LoadMessages();
+    }
+
+    private void ApplyFilters()
+    {
+        filteredMessages = messages;
+
+        // Filter by status
+        if (!string.IsNullOrEmpty(filterStatus) && Enum.TryParse<MessageStatus>(filterStatus, out var status))
+        {
+            filteredMessages = filteredMessages.Where(m => m.Status == status).ToList();
+        }
+
+        // Filter by type
+        if (!string.IsNullOrEmpty(filterType))
+        {
+            if (filterType == "birthday")
+            {
+                filteredMessages = filteredMessages.Where(m => m.IsBirthdayMessage).ToList();
+            }
+            else if (filterType == "manual")
+            {
+                filteredMessages = filteredMessages.Where(m => !m.IsBirthdayMessage).ToList();
+            }
+        }
+
+        // Filter by search text
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            filteredMessages = filteredMessages.Where(m => 
+                m.Contact.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                m.Content.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+    }
+
+    private string GetMessageStatusClass(MessageStatus status)
+    {
+        return status switch
+        {
+            MessageStatus.Sent or MessageStatus.Delivered or MessageStatus.Read => "message-success",
+            MessageStatus.Failed => "message-failed",
+            MessageStatus.Pending => "message-pending",
+            _ => ""
+        };
+    }
+
+    private string GetStatusIcon(MessageStatus status)
+    {
+        return status switch
+        {
+            MessageStatus.Sent => "✓",
+            MessageStatus.Delivered => "✓✓",
+            MessageStatus.Read => "✓✓",
+            MessageStatus.Failed => "✗",
+            MessageStatus.Pending => "⏳",
+            _ => ""
+        };
+    }
+}

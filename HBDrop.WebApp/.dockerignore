@@ -1,0 +1,33 @@
+# Ignore build output
+bin/
+obj/
+
+# Ignore user-specific files
+*.user
+*.suo
+
+# Ignore migrations (will be applied on startup)
+Migrations/
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore environment files
+appsettings.Development.json
+.env
+.env.local
+
+# Ignore NuGet packages
+*.nupkg

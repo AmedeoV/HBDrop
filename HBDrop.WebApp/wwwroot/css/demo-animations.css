@@ -1,0 +1,386 @@
+/* Enhanced Demo Animations */
+
+/* Demo phone container */
+.demo-phone {
+    max-width: 350px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 30px;
+    padding: 15px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border: 8px solid #222;
+    position: relative;
+}
+
+.demo-phone::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 25px;
+    background: #222;
+    border-radius: 0 0 15px 15px;
+}
+
+.demo-screen {
+    background: #e5ddd5;
+    border-radius: 15px;
+    padding: 20px;
+    min-height: 400px;
+}
+
+.messages-container {
+    min-height: 300px;
+}
+
+.message-bubble {
+    background: #dcf8c6;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    max-width: 80%;
+    margin-left: auto;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    color: #111;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.message-status {
+    text-align: right;
+    margin-top: 5px;
+    font-size: 0.75rem;
+    color: #667781;
+}
+
+.checkmark {
+    color: #667781;
+}
+
+.read-checkmark {
+    color: #53bdeb;
+}
+
+/* Notification badge */
+.notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #25d366;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: badgeBounce 0.5s ease-out;
+}
+
+@keyframes badgeBounce {
+    0% {
+        transform: scale(0);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: #fff;
+    border-radius: 20px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    margin: 0 3px;
+    background: #666;
+    border-radius: 50%;
+    animation: typingDot 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingDot {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    30% {
+        transform: translateY(-10px);
+        opacity: 1;
+    }
+}
+
+/* Message appearance animation */
+.message-appear {
+    animation: messageAppear 0.3s ease-out;
+}
+
+@keyframes messageAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.8) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Checkmark animations */
+.message-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 5px;
+    font-size: 0.9rem;
+}
+
+.checkmark {
+    display: inline-block;
+    animation: checkmarkAppear 0.3s ease-out;
+}
+
+@keyframes checkmarkAppear {
+    from {
+        opacity: 0;
+        transform: scale(0);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Read receipt animation */
+.read-checkmark {
+    color: #4fc3f7;
+    animation: readPulse 0.5s ease-out;
+}
+
+@keyframes readPulse {
+    0% {
+        color: #666;
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        color: #4fc3f7;
+        transform: scale(1);
+    }
+}
+
+/* Phone notification badge */
+.notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: var(--birthday-primary);
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: bold;
+    animation: badgeBounce 0.5s ease-out;
+}
+
+@keyframes badgeBounce {
+    0% {
+        transform: scale(0);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Demo control buttons */
+.demo-controls {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+.demo-btn {
+    background: var(--birthday-primary);
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 25px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 0 5px;
+}
+
+.demo-btn:hover {
+    background: var(--birthday-secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(255, 107, 157, 0.3);
+}
+
+.demo-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Progress bar for demo */
+.demo-progress {
+    width: 100%;
+    height: 4px;
+    background: #f0f0f0;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 1rem;
+}
+
+.demo-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--birthday-primary), var(--birthday-secondary));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* Celebration confetti */
+@keyframes confettiDrop {
+    0% {
+        transform: translateY(-100vh) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100vh) rotate(720deg);
+        opacity: 0;
+    }
+}
+
+.confetti-piece {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+/* Celebration animation for successful send */
+.celebration {
+    animation: celebrate 0.6s ease-out;
+}
+
+@keyframes celebrate {
+    0%, 100% {
+        transform: scale(1);
+    }
+    25% {
+        transform: scale(1.1) rotate(-5deg);
+    }
+    75% {
+        transform: scale(1.1) rotate(5deg);
+    }
+}
+
+/* Demo timeline */
+.demo-timeline {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 2rem 0;
+    padding: 0 1rem;
+}
+
+.timeline-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+}
+
+.timeline-step::before {
+    content: '';
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    width: 100%;
+    height: 2px;
+    background: #e0e0e0;
+    z-index: -1;
+}
+
+.timeline-step:first-child::before {
+    left: 50%;
+    width: 50%;
+}
+
+.timeline-step:last-child::before {
+    width: 50%;
+    right: 50%;
+}
+
+.timeline-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.timeline-step.active .timeline-icon {
+    border-color: var(--birthday-primary);
+    background: var(--birthday-primary);
+    color: white;
+    animation: pulse 1s ease-out infinite;
+}
+
+.timeline-step.completed .timeline-icon {
+    border-color: var(--birthday-accent);
+    background: var(--birthday-accent);
+    color: white;
+}
+
+.timeline-label {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.timeline-step.active .timeline-label {
+    color: var(--birthday-primary);
+    font-weight: 600;
+}

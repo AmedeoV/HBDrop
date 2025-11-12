@@ -1,0 +1,71 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Web
+@namespace HBDrop.WebApp.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link href="css/site.css" rel="stylesheet" />
+    <link href="css/birthday-theme.css" rel="stylesheet" />
+    <link href="css/demo-animations.css" rel="stylesheet" />
+    <link href="css/dashboard.css" rel="stylesheet" />
+    <link href="css/whatsapp-connect.css" rel="stylesheet" />
+    <link href="css/contacts.css" rel="stylesheet" />
+    <link href="css/messages.css" rel="stylesheet" />
+    <link href="HBDrop.WebApp.styles.css" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="favicon.png"/>
+    <component type="typeof(HeadOutlet)" render-mode="Server" />
+</head>
+<body>
+    <component type="typeof(App)" render-mode="Server" />
+    
+    <!-- Loading overlay to prevent FOUC (Flash of Unstyled Content) -->
+    <div id="app-loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+        <div style="text-align: center; color: white;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🎂</div>
+            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div style="margin-top: 1rem; font-size: 1.2rem;">Loading HBDrop...</div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        <environment include="Staging,Production">
+            An error has occurred. This application may no longer respond until reloaded.
+        </environment>
+        <environment include="Development">
+            An unhandled exception has occurred. See browser dev tools for details.
+        </environment>
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script src="_framework/blazor.server.js"></script>
+    <script src="Identity/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/demo.js"></script>
+    
+    <!-- Hide loading overlay once Blazor is loaded -->
+    <script>
+        // Wait for Blazor to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hide loading after a short delay to ensure Blazor has initialized
+            setTimeout(function() {
+                const loadingElement = document.getElementById('app-loading');
+                if (loadingElement) {
+                    loadingElement.style.opacity = '0';
+                    loadingElement.style.transition = 'opacity 0.3s ease-out';
+                    setTimeout(function() {
+                        loadingElement.style.display = 'none';
+                    }, 300);
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>

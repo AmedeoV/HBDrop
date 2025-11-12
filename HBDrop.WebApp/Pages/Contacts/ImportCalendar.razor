@@ -1,0 +1,698 @@
+@page "/contacts/import-calendar"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
+@using Microsoft.AspNetCore.Components.Forms
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject CalendarImportService CalendarImportService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Import Calendar - HBDrop</PageTitle>
+
+<div class="import-calendar-container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header -->
+            <div class="mb-4">
+                <h2>📅 Import Birthdays from Calendar</h2>
+                <p class="text-muted">Upload your calendar file (.ics) to import birthdays</p>
+            </div>
+
+            <!-- Instructions -->
+            @if (currentStep == ImportStep.Upload)
+            {
+                <div class="alert alert-info mb-4">
+                    <h6><i class="bi bi-info-circle"></i> How to export your calendar:</h6>
+                    <ul class="mb-0">
+                        <li><strong>iPhone/iPad:</strong> Settings → Accounts → iCloud → Calendars → Export Calendar (or use the Calendar app)</li>
+                        <li><strong>Android/Google Calendar:</strong> Open <a href="https://calendar.google.com" target="_blank">Google Calendar</a> → Settings → Import & Export → Export</li>
+                        <li><strong>Outlook:</strong> File → Save Calendar → Save as iCalendar Format (.ics)</li>
+                        <li><strong>Apple Calendar (Mac):</strong> File → Export → Export</li>
+                    </ul>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show">
+                    <strong>Error:</strong> @errorMessage
+                    <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show">
+                    <strong>Success!</strong> @successMessage
+                    <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+                </div>
+            }
+
+            <!-- Step 1: Upload Calendar File -->
+            @if (currentStep == ImportStep.Upload)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body p-5">
+                        @if (isProcessing)
+                        {
+                            <div class="text-center">
+                                <div class="spinner-border text-primary mb-3" role="status">
+                                    <span class="visually-hidden">Processing...</span>
+                                </div>
+                                <p class="text-muted">Analyzing your calendar file...</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center mb-4">
+                                <div style="font-size: 5rem; opacity: 0.8;">📆</div>
+                                <h4>Upload Your Calendar File</h4>
+                                <p class="text-muted">Select an .ics file to import birthdays</p>
+                            </div>
+
+                            <div class="upload-area">
+                                <InputFile OnChange="HandleFileSelected" accept=".ics" class="form-control" />
+                            </div>
+
+                            @if (selectedFile != null)
+                            {
+                                <div class="mt-3 p-3 bg-light rounded">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <i class="bi bi-file-earmark-text text-primary me-2"></i>
+                                            <strong>@selectedFile.Name</strong>
+                                            <span class="text-muted ms-2">(@FormatFileSize(selectedFile.Size))</span>
+                                        </div>
+                                        <button class="btn btn-primary" @onclick="ProcessCalendarFile">
+                                            <i class="bi bi-upload"></i> Process File
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Step 2: Review & Match Birthdays -->
+            @if (currentStep == ImportStep.Review && matchResults != null)
+            {
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">🎂 Review Birthday Matches</h5>
+                                <p class="text-muted mb-0">
+                                    Found <strong>@matchResults.Count</strong> birthdays in your calendar
+                                </p>
+                            </div>
+                            <button class="btn btn-outline-secondary" @onclick="ResetImport">
+                                ← Back
+                            </button>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-success" @onclick="() => SelectAll(true)">
+                                    <i class="bi bi-check-square"></i> Select All
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SelectAll(false)">
+                                    <i class="bi bi-square"></i> Deselect All
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Birthday Matches List -->
+                        <div class="birthday-matches-list">
+                            @foreach (var match in matchResults)
+                            {
+                                <div class="birthday-match-item @(match.SelectedContactId.HasValue || match.CreateNewContact ? "selected" : "")">
+                                    <div class="d-flex align-items-start">
+                                        <div class="form-check me-3 mt-1">
+                                            <input type="checkbox" class="form-check-input" 
+                                                   checked="@(match.SelectedContactId.HasValue || match.CreateNewContact)"
+                                                   @onchange="@(e => ToggleMatchSelection(match, (bool)e.Value!))" />
+                                        </div>
+
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <h6 class="mb-1">
+                                                        @match.CalendarEntry.Name
+                                                        @if (match.CalendarEntry.IsRecurring)
+                                                        {
+                                                            <span class="badge bg-info ms-2">Recurring</span>
+                                                        }
+                                                    </h6>
+                                                    <small class="text-muted">
+                                                        Birthday: @match.CalendarEntry.BirthDate.ToString("MMMM dd, yyyy")
+                                                    </small>
+                                                </div>
+                                            </div>
+
+                                            <!-- Potential Matches -->
+                                            @if (match.PotentialMatches.Any() && !match.ShowManualSearch)
+                                            {
+                                                <div class="potential-matches mt-2">
+                                                    <label class="form-label small text-muted mb-1">Match with existing contact:</label>
+                                                    <select class="form-select form-select-sm" 
+                                                            @onchange="@(e => SelectContact(match, e.Value?.ToString()))">
+                                                        <option value="">-- Select a contact --</option>
+                                                        @foreach (var potentialMatch in match.PotentialMatches)
+                                                        {
+                                                            <option value="@potentialMatch.Contact.Id" 
+                                                                    selected="@(match.SelectedContactId == potentialMatch.Contact.Id)">
+                                                                @potentialMatch.Contact.Name (@potentialMatch.MatchScore% match) - @potentialMatch.Contact.PhoneNumber
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    
+                                                    <!-- Option to search manually instead -->
+                                                    <button class="btn btn-sm btn-link text-decoration-none p-0 mt-1" 
+                                                            @onclick="@(() => match.ShowManualSearch = true)">
+                                                        <i class="bi bi-search"></i> Search for different contact
+                                                    </button>
+                                                    
+                                                    @if (match.SelectedContactId.HasValue)
+                                                    {
+                                                        <div class="mt-2">
+                                                            <label class="form-check-label d-block">
+                                                                <input type="checkbox" class="form-check-input me-2"
+                                                                       checked="@match.CreateAsAdditionalBirthday"
+                                                                       @onchange="@(e => match.CreateAsAdditionalBirthday = (bool)e.Value!)" />
+                                                                <small>Add as additional birthday (family member without own phone)</small>
+                                                            </label>
+                                                            @if (match.CreateAsAdditionalBirthday)
+                                                            {
+                                                                <input type="text" class="form-control form-control-sm mt-2" 
+                                                                       placeholder="Relationship (e.g., Son, Daughter, Spouse)"
+                                                                       @bind="match.AdditionalBirthdayRelationship" />
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                            else if (match.ShowManualSearch || !match.PotentialMatches.Any())
+                                            {
+                                                <div class="@(match.PotentialMatches.Any() ? "potential-matches" : "alert alert-warning alert-sm") mt-2 mb-0">
+                                                    <small>
+                                                        @if (!match.PotentialMatches.Any())
+                                                        {
+                                                            <div class="mb-2">
+                                                                <i class="bi bi-exclamation-triangle"></i> No matching contacts found.
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button class="btn btn-sm btn-link text-decoration-none p-0 mb-2" 
+                                                                    @onclick="@(() => match.ShowManualSearch = false)">
+                                                                <i class="bi bi-arrow-left"></i> Back to automatic matches
+                                                            </button>
+                                                        }
+                                                        
+                                                        <!-- Manual Search -->
+                                                        <div class="mt-2">
+                                                            <label class="form-label small mb-1">Search for a contact:</label>
+                                                            <div class="input-group input-group-sm">
+                                                                <input type="text" class="form-control" 
+                                                                       placeholder="Type name to search..."
+                                                                       @bind="match.SearchTerm"
+                                                                       @bind:event="oninput"
+                                                                       @onkeyup="@(() => SearchContacts(match))" />
+                                                                @if (!string.IsNullOrWhiteSpace(match.SearchTerm))
+                                                                {
+                                                                    <button class="btn btn-outline-secondary" @onclick="@(() => ClearSearch(match))">
+                                                                        <i class="bi bi-x"></i>
+                                                                    </button>
+                                                                }
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Search Results -->
+                                                        @if (match.SearchResults != null && match.SearchResults.Any())
+                                                        {
+                                                            <div class="mt-2">
+                                                                <select class="form-select form-select-sm" 
+                                                                        @onchange="@(e => SelectSearchResult(match, e.Value?.ToString()))">
+                                                                    <option value="">-- Select from search results --</option>
+                                                                    @foreach (var searchResult in match.SearchResults)
+                                                                    {
+                                                                        <option value="@searchResult.Id"
+                                                                                selected="@(match.SelectedContactId == searchResult.Id)">
+                                                                            @searchResult.Name - @searchResult.PhoneNumber
+                                                                        </option>
+                                                                    }
+                                                                </select>
+                                                            </div>
+                                                        }
+
+                                                        <!-- Additional Birthday Option -->
+                                                        @if (match.SelectedContactId.HasValue)
+                                                        {
+                                                            <div class="mt-2">
+                                                                <label class="form-check-label d-block">
+                                                                    <input type="checkbox" class="form-check-input me-2"
+                                                                           checked="@match.CreateAsAdditionalBirthday"
+                                                                           @onchange="@(e => match.CreateAsAdditionalBirthday = (bool)e.Value!)" />
+                                                                    <small>Add as additional birthday (family member without own phone)</small>
+                                                                </label>
+                                                                @if (match.CreateAsAdditionalBirthday)
+                                                                {
+                                                                    <input type="text" class="form-control form-control-sm mt-2" 
+                                                                           placeholder="Relationship (e.g., Son, Daughter, Spouse)"
+                                                                           @bind="match.AdditionalBirthdayRelationship" />
+                                                                }
+                                                            </div>
+                                                        }
+
+                                                        <!-- Create New Contact Option -->
+                                                        <label class="d-block mt-2">
+                                                            <input type="checkbox" class="form-check-input me-2"
+                                                                   checked="@match.CreateNewContact"
+                                                                   @onchange="@(e => ToggleCreateNew(match, (bool)e.Value!))" />
+                                                            Create as new contact
+                                                        </label>
+                                                        @if (match.CreateNewContact)
+                                                        {
+                                                            <input type="tel" class="form-control form-control-sm mt-2" 
+                                                                   placeholder="Phone number (optional)"
+                                                                   @bind="match.NewContactPhoneNumber" />
+                                                        }
+                                                    </small>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mt-4 d-flex justify-content-between align-items-center">
+                            <div class="text-muted">
+                                <small>
+                                    Selected: <strong>@GetSelectedCount()</strong> / @matchResults.Count
+                                    @if (GetAdditionalBirthdayCount() > 0)
+                                    {
+                                        <span class="ms-2 text-info">
+                                            (<i class="bi bi-people"></i> @GetAdditionalBirthdayCount() as additional birthday)
+                                        </span>
+                                    }
+                                </small>
+                            </div>
+                            <button class="btn btn-primary btn-lg" 
+                                    @onclick="ImportSelectedBirthdays"
+                                    disabled="@(GetSelectedCount() == 0 || isProcessing)">
+                                @if (isProcessing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="bi bi-download"></i> Import @GetSelectedCount() Birthday@(GetSelectedCount() != 1 ? "s" : "")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 3: Success -->
+            @if (currentStep == ImportStep.Complete && importResult != null)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body p-5 text-center">
+                        <div style="font-size: 5rem;" class="mb-3">✅</div>
+                        <h4>Import Complete!</h4>
+                        <p class="text-muted mb-4">Your birthdays have been successfully imported</p>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <div class="stat-box bg-success bg-opacity-10">
+                                    <div class="stat-value text-success">@importResult.Imported</div>
+                                    <div class="stat-label">New Birthdays</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="stat-box bg-info bg-opacity-10">
+                                    <div class="stat-value text-info">@importResult.Updated</div>
+                                    <div class="stat-label">Updated</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="stat-box bg-danger bg-opacity-10">
+                                    <div class="stat-value text-danger">@importResult.Failed</div>
+                                    <div class="stat-label">Failed</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 justify-content-center">
+                            <a href="/contacts" class="btn btn-primary">
+                                <i class="bi bi-people"></i> View Contacts
+                            </a>
+                            <button class="btn btn-outline-secondary" @onclick="ResetImport">
+                                <i class="bi bi-upload"></i> Import Another Calendar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .import-calendar-container {
+        padding: 2rem 0;
+    }
+
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 0.5rem;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .upload-area:hover {
+        border-color: #0d6efd;
+        background-color: #f8f9fa;
+    }
+
+    .birthday-matches-list {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .birthday-match-item {
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        transition: all 0.2s ease;
+    }
+
+    .birthday-match-item:hover {
+        background-color: #f8f9fa;
+        border-color: #adb5bd;
+    }
+
+    .birthday-match-item.selected {
+        background-color: #e7f3ff;
+        border-color: #0d6efd;
+    }
+
+    .potential-matches {
+        padding: 0.5rem;
+        background-color: #f8f9fa;
+        border-radius: 0.375rem;
+    }
+
+    .alert-sm {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    .stat-box {
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+</style>
+
+@code {
+    private enum ImportStep
+    {
+        Upload,
+        Review,
+        Complete
+    }
+
+    private ImportStep currentStep = ImportStep.Upload;
+    private IBrowserFile? selectedFile;
+    private bool isProcessing = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private List<BirthdayMatchResult>? matchResults;
+    private ImportResult? importResult;
+    private string currentUserId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (!user.Identity?.IsAuthenticated ?? true)
+        {
+            Navigation.NavigateTo("/Identity/Account/Login?returnUrl=/contacts/import-calendar");
+            return;
+        }
+
+        var appUser = await UserManager.GetUserAsync(user);
+        if (appUser != null)
+        {
+            currentUserId = appUser.Id;
+        }
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        errorMessage = null;
+    }
+
+    private async Task ProcessCalendarFile()
+    {
+        if (selectedFile == null)
+        {
+            errorMessage = "Please select a file first.";
+            return;
+        }
+
+        isProcessing = true;
+        errorMessage = null;
+
+        try
+        {
+            // Read file stream
+            using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB max
+            
+            // Parse calendar file
+            var parseResult = await CalendarImportService.ParseCalendarFileAsync(stream);
+            
+            if (!parseResult.Success)
+            {
+                errorMessage = parseResult.ErrorMessage;
+                return;
+            }
+
+            if (parseResult.BirthdayEntries.Count == 0)
+            {
+                errorMessage = "No birthday events found in the calendar file. Make sure your calendar contains birthday entries.";
+                return;
+            }
+
+            // Match with existing contacts
+            matchResults = await CalendarImportService.MatchWithContactsAsync(
+                parseResult.BirthdayEntries, 
+                currentUserId);
+
+            currentStep = ImportStep.Review;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error processing file: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void SelectContact(BirthdayMatchResult match, string? contactId)
+    {
+        if (string.IsNullOrEmpty(contactId))
+        {
+            match.SelectedContactId = null;
+            match.CreateAsAdditionalBirthday = false;
+        }
+        else if (int.TryParse(contactId, out var id))
+        {
+            match.SelectedContactId = id;
+            match.CreateNewContact = false;
+        }
+    }
+
+    private async Task SearchContacts(BirthdayMatchResult match)
+    {
+        if (string.IsNullOrWhiteSpace(match.SearchTerm) || match.SearchTerm.Length < 2)
+        {
+            match.SearchResults = null;
+            return;
+        }
+
+        try
+        {
+            var searchResults = await CalendarImportService.SearchContactsAsync(match.SearchTerm, currentUserId);
+            match.SearchResults = searchResults;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error searching contacts: {ex.Message}";
+        }
+    }
+
+    private void SelectSearchResult(BirthdayMatchResult match, string? contactId)
+    {
+        if (string.IsNullOrEmpty(contactId))
+        {
+            match.SelectedContactId = null;
+            match.CreateAsAdditionalBirthday = false;
+        }
+        else if (int.TryParse(contactId, out var id))
+        {
+            match.SelectedContactId = id;
+            match.CreateNewContact = false;
+        }
+    }
+
+    private void ClearSearch(BirthdayMatchResult match)
+    {
+        match.SearchTerm = null;
+        match.SearchResults = null;
+    }
+
+    private void ToggleCreateNew(BirthdayMatchResult match, bool create)
+    {
+        match.CreateNewContact = create;
+        if (create)
+        {
+            match.SelectedContactId = null;
+            match.CreateAsAdditionalBirthday = false;
+        }
+    }
+
+    private void ToggleMatchSelection(BirthdayMatchResult match, bool selected)
+    {
+        if (!selected)
+        {
+            match.SelectedContactId = null;
+            match.CreateNewContact = false;
+            match.CreateAsAdditionalBirthday = false;
+        }
+        else if (match.PotentialMatches.Any())
+        {
+            // Auto-select the best match
+            match.SelectedContactId = match.PotentialMatches[0].Contact.Id;
+        }
+    }
+
+    private void SelectAll(bool select)
+    {
+        if (matchResults == null) return;
+
+        foreach (var match in matchResults)
+        {
+            if (select)
+            {
+                if (match.PotentialMatches.Any())
+                {
+                    match.SelectedContactId = match.PotentialMatches[0].Contact.Id;
+                }
+                else
+                {
+                    match.CreateNewContact = true;
+                }
+            }
+            else
+            {
+                match.SelectedContactId = null;
+                match.CreateNewContact = false;
+            }
+        }
+    }
+
+    private int GetSelectedCount()
+    {
+        if (matchResults == null) return 0;
+        return matchResults.Count(m => m.SelectedContactId.HasValue || m.CreateNewContact);
+    }
+
+    private int GetAdditionalBirthdayCount()
+    {
+        if (matchResults == null) return 0;
+        return matchResults.Count(m => m.SelectedContactId.HasValue && m.CreateAsAdditionalBirthday);
+    }
+
+    private async Task ImportSelectedBirthdays()
+    {
+        if (matchResults == null) return;
+
+        isProcessing = true;
+        errorMessage = null;
+
+        try
+        {
+            var selectedMatches = matchResults
+                .Where(m => m.SelectedContactId.HasValue || m.CreateNewContact)
+                .ToList();
+
+            importResult = await CalendarImportService.ImportBirthdaysAsync(selectedMatches, currentUserId);
+
+            if (importResult.Success)
+            {
+                currentStep = ImportStep.Complete;
+            }
+            else
+            {
+                errorMessage = "Some birthdays failed to import. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error importing birthdays: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void ResetImport()
+    {
+        currentStep = ImportStep.Upload;
+        selectedFile = null;
+        matchResults = null;
+        importResult = null;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+}

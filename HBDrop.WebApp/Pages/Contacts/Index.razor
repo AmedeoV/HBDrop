@@ -1,0 +1,766 @@
+@page "/contacts"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Contacts - HBDrop</PageTitle>
+
+<div class="contacts-container">
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2>📇 My Contacts</h2>
+                    <p class="text-muted mb-0">
+                        @individualContacts.Count individual contacts • @groupContacts.Count groups
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/contacts/add" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> Add Contact
+                    </a>
+                    <a href="/contacts/import" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Import vCard
+                    </a>
+                    <a href="/contacts/import-calendar" class="btn btn-info">
+                        <i class="bi bi-calendar-check"></i> Import Calendar
+                    </a>
+                    <a href="/groups" class="btn btn-outline-primary">
+                        <i class="bi bi-people-fill"></i> Manage Groups
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Loading contacts...</p>
+        </div>
+    }
+    else if (!contacts.Any())
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-5 text-center">
+                <div class="empty-icon mb-3" style="font-size: 4rem;">📭</div>
+                <h4 class="mb-3">No Contacts Yet</h4>
+                <p class="text-muted mb-4">Get started by adding contacts manually or importing from your phone.</p>
+                <div class="d-flex gap-2 justify-content-center">
+                    <a href="/contacts/add" class="btn btn-success btn-lg">
+                        <i class="bi bi-plus-circle"></i> Add Contact
+                    </a>
+                    <a href="/contacts/import" class="btn btn-primary btn-lg">
+                        <i class="bi bi-upload"></i> Import vCard
+                    </a>
+                    <a href="/contacts/import-calendar" class="btn btn-info btn-lg">
+                        <i class="bi bi-calendar-check"></i> Import Calendar
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Import Tip Banner -->
+        @if (showImportTip && contacts.Any(c => c.Birthdays == null || !c.Birthdays.Any()))
+        {
+            <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+                <div class="d-flex align-items-center">
+                    <div class="me-3" style="font-size: 2rem;">📅</div>
+                    <div class="flex-grow-1">
+                        <h6 class="alert-heading mb-1">💡 Quick Tip: Import Birthdays from Your Calendar!</h6>
+                        <p class="mb-2">
+                            Save time! Import birthdays directly from your iPhone, Android, or Google Calendar with smart auto-matching.
+                        </p>
+                        <a href="/contacts/import-calendar" class="btn btn-sm btn-primary me-2">
+                            <i class="bi bi-calendar-check"></i> Import Calendar
+                        </a>
+                        <a href="/CALENDAR_IMPORT_GUIDE.md" target="_blank" class="btn btn-sm btn-outline-info">
+                            <i class="bi bi-info-circle"></i> Learn How
+                        </a>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" @onclick="() => showImportTip = false" aria-label="Close"></button>
+            </div>
+        }
+
+        <!-- Tabs for switching between Individual Contacts and Groups -->
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(activeTab == "individuals" ? "active" : "")" 
+                        @onclick='() => activeTab = "individuals"' 
+                        type="button">
+                    <i class="bi bi-person"></i> Individual Contacts (@individualContacts.Count)
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(activeTab == "groups" ? "active" : "")" 
+                        @onclick='() => activeTab = "groups"' 
+                        type="button">
+                    <i class="bi bi-people-fill"></i> WhatsApp Groups (@groupContacts.Count)
+                </button>
+            </li>
+        </ul>
+
+        <!-- Individual Contacts Tab -->
+        @if (activeTab == "individuals")
+        {
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <!-- Search Box -->
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   placeholder="Search by name or phone number..."
+                                   @bind="searchQuery"
+                                   @bind:event="oninput"
+                                   @onkeyup="FilterContacts" />
+                            @if (!string.IsNullOrWhiteSpace(searchQuery))
+                            {
+                                <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(searchQuery))
+                        {
+                            <small class="text-muted">
+                                Showing @filteredIndividualContacts.Count of @individualContacts.Count contacts
+                            </small>
+                        }
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th style="cursor: pointer;" @onclick='() => SortContacts("Name")'>
+                                        Name
+                                        @if (sortColumn == "Name")
+                                        {
+                                            <i class="bi bi-@(sortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th style="cursor: pointer;" @onclick='() => SortContacts("PhoneNumber")'>
+                                        Phone Number
+                                        @if (sortColumn == "PhoneNumber")
+                                        {
+                                            <i class="bi bi-@(sortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th style="cursor: pointer;" @onclick='() => SortContacts("Birthday")'>
+                                        Birthday
+                                        @if (sortColumn == "Birthday")
+                                        {
+                                            <i class="bi bi-@(sortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th style="cursor: pointer;" @onclick='() => SortContacts("NextBirthday")'>
+                                        Next Birthday
+                                        @if (sortColumn == "NextBirthday")
+                                        {
+                                            <i class="bi bi-@(sortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th style="cursor: pointer;" @onclick='() => SortContacts("SendTo")'>
+                                        Send To
+                                        @if (sortColumn == "SendTo")
+                                        {
+                                            <i class="bi bi-@(sortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th style="cursor: pointer;" @onclick='() => SortContacts("Status")'>
+                                        Status
+                                        @if (sortColumn == "Status")
+                                        {
+                                            <i class="bi bi-@(sortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!filteredIndividualContacts.Any())
+                                {
+                                    @if (string.IsNullOrWhiteSpace(searchQuery))
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                No individual contacts yet. <a href="/contacts/add">Add your first contact</a> or <a href="/contacts/import">import from vCard</a>.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                No contacts found matching "@searchQuery"
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    @foreach (var contact in filteredIndividualContacts)
+                                    {
+                                        var birthday = contact.Birthdays.FirstOrDefault();
+                                        var nextBirthday = birthday != null ? GetNextBirthday(birthday.BirthDate) : (DateTime?)null;
+                                        var daysUntil = nextBirthday.HasValue ? (int)(nextBirthday.Value - DateTime.Today).TotalDays : 0;
+
+                                        <tr>
+                                            <td>
+                                                <strong>@contact.Name</strong>
+                                            </td>
+                                            <td>@contact.PhoneNumber</td>
+                                            <td>
+                                                @if (birthday != null)
+                                                {
+                                                    @birthday.BirthDate.ToString("MMMM dd, yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (nextBirthday.HasValue)
+                                                {
+                                                    <span>@nextBirthday.Value.ToString("MMM dd, yyyy")</span>
+                                                    @if (daysUntil == 0)
+                                                    {
+                                                        <span class="badge bg-danger ms-2">🎉 Today!</span>
+                                                    }
+                                                    else if (daysUntil == 1)
+                                                    {
+                                                        <span class="badge bg-warning ms-2">Tomorrow</span>
+                                                    }
+                                                    else if (daysUntil <= 7)
+                                                    {
+                                                        <span class="badge bg-info ms-2">In @daysUntil days</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (birthday != null)
+                                                {
+                                                    var sendToGroup = GetSendToGroupName(birthday.SendToGroupId);
+                                                    if (!string.IsNullOrEmpty(sendToGroup))
+                                                    {
+                                                        <span class="badge bg-info">
+                                                            <i class="bi bi-people-fill"></i> @sendToGroup
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-primary">
+                                                            <i class="bi bi-person"></i> @contact.Name
+                                                        </span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (birthday?.IsEnabled == true)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else if (birthday != null)
+                                                {
+                                                    <span class="badge bg-secondary">Disabled</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning">No Birthday</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <a href="/contacts/edit/@contact.Id" class="btn btn-sm btn-primary" title="Edit">
+                                                        <i class="bi bi-pencil"></i> Edit
+                                                    </a>
+                                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteContact(contact)" title="Delete">
+                                                        <i class="bi bi-trash"></i> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- WhatsApp Groups Tab -->
+        @if (activeTab == "groups")
+        {
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>WhatsApp Groups:</strong> These groups are automatically synced from your WhatsApp. 
+                        You can assign birthdays to groups to send birthday wishes to everyone in that group!
+                    </div>
+                    
+                    <!-- Search Box -->
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   placeholder="Search groups by name..."
+                                   @bind="groupSearchQuery"
+                                   @bind:event="oninput"
+                                   @onkeyup="FilterGroups" />
+                            @if (!string.IsNullOrWhiteSpace(groupSearchQuery))
+                            {
+                                <button class="btn btn-outline-secondary" @onclick="ClearGroupSearch">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(groupSearchQuery))
+                        {
+                            <small class="text-muted">
+                                Showing @filteredGroupContacts.Count of @groupContacts.Count groups
+                            </small>
+                        }
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th style="cursor: pointer;" @onclick='() => SortGroups("Name")'>
+                                        Group Name
+                                        @if (groupSortColumn == "Name")
+                                        {
+                                            <i class="bi bi-@(groupSortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th>Type</th>
+                                    <th style="cursor: pointer;" @onclick='() => SortGroups("Birthday")'>
+                                        Birthday
+                                        @if (groupSortColumn == "Birthday")
+                                        {
+                                            <i class="bi bi-@(groupSortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th style="cursor: pointer;" @onclick='() => SortGroups("NextBirthday")'>
+                                        Next Birthday
+                                        @if (groupSortColumn == "NextBirthday")
+                                        {
+                                            <i class="bi bi-@(groupSortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th style="cursor: pointer;" @onclick='() => SortGroups("Status")'>
+                                        Status
+                                        @if (groupSortColumn == "Status")
+                                        {
+                                            <i class="bi bi-@(groupSortAscending ? "arrow-up" : "arrow-down")"></i>
+                                        }
+                                    </th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!filteredGroupContacts.Any())
+                                {
+                                    @if (string.IsNullOrWhiteSpace(groupSearchQuery))
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-4">
+                                                No groups yet. <a href="/groups">Visit the Groups page</a> to sync your WhatsApp groups.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-4">
+                                                No groups found matching "@groupSearchQuery"
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    @foreach (var contact in filteredGroupContacts)
+                                    {
+                                        var birthday = contact.Birthdays.FirstOrDefault();
+                                        var nextBirthday = birthday != null ? GetNextBirthday(birthday.BirthDate) : (DateTime?)null;
+                                        var daysUntil = nextBirthday.HasValue ? (int)(nextBirthday.Value - DateTime.Today).TotalDays : 0;
+
+                                        <tr>
+                                            <td>
+                                                <strong>
+                                                    <i class="bi bi-people-fill text-primary"></i>
+                                                    @contact.Name
+                                                </strong>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">WhatsApp Group</small>
+                                            </td>
+                                            <td>
+                                                @if (birthday != null)
+                                                {
+                                                    @birthday.BirthDate.ToString("MMMM dd, yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (nextBirthday.HasValue)
+                                                {
+                                                    <span>@nextBirthday.Value.ToString("MMM dd, yyyy")</span>
+                                                    @if (daysUntil == 0)
+                                                    {
+                                                        <span class="badge bg-danger ms-2">🎉 Today!</span>
+                                                    }
+                                                    else if (daysUntil == 1)
+                                                    {
+                                                        <span class="badge bg-warning ms-2">Tomorrow</span>
+                                                    }
+                                                    else if (daysUntil <= 7)
+                                                    {
+                                                        <span class="badge bg-info ms-2">In @daysUntil days</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (birthday?.IsEnabled == true)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else if (birthday != null)
+                                                {
+                                                    <span class="badge bg-secondary">Disabled</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning">No Birthday</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <a href="/contacts/edit/@contact.Id" class="btn btn-sm btn-primary" title="Edit">
+                                                        <i class="bi bi-pencil"></i> Edit
+                                                    </a>
+                                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteContact(contact)" title="Delete">
+                                                        <i class="bi bi-trash"></i> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Contact> contacts = new();
+    private List<Contact> individualContacts = new();
+    private List<Contact> groupContacts = new();
+    private List<Contact> filteredIndividualContacts = new();
+    private List<Contact> filteredGroupContacts = new();
+    private bool isLoading = true;
+    private string? userId;
+    private string activeTab = "individuals";
+    private string searchQuery = "";
+    private string groupSearchQuery = "";
+    private bool showImportTip = true;
+    
+    // Sorting for individual contacts
+    private string sortColumn = "Name";
+    private bool sortAscending = true;
+    
+    // Sorting for groups
+    private string groupSortColumn = "Name";
+    private bool groupSortAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var applicationUser = await UserManager.GetUserAsync(user);
+        if (applicationUser != null)
+        {
+            userId = applicationUser.Id;
+            await LoadContacts();
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadContacts()
+    {
+        contacts = await DbContext.Contacts
+            .Include(c => c.Birthdays)
+            .Where(c => c.UserId == userId)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+        
+        // Separate into individual contacts and groups
+        individualContacts = contacts.Where(c => !c.IsGroup).ToList();
+        groupContacts = contacts.Where(c => c.IsGroup).ToList();
+        
+        // Initialize filtered lists
+        FilterContacts();
+        FilterGroups();
+    }
+
+    private string? GetSendToGroupName(string? sendToGroupId)
+    {
+        if (string.IsNullOrEmpty(sendToGroupId))
+            return null;
+        
+        var group = groupContacts.FirstOrDefault(g => g.GroupId == sendToGroupId);
+        return group?.Name;
+    }
+
+    private void FilterContacts()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filteredIndividualContacts = individualContacts;
+        }
+        else
+        {
+            filteredIndividualContacts = individualContacts
+                .Where(c => c.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                           c.PhoneNumber.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        
+        // Apply current sorting
+        SortContacts(sortColumn);
+    }
+
+    private void FilterGroups()
+    {
+        if (string.IsNullOrWhiteSpace(groupSearchQuery))
+        {
+            filteredGroupContacts = groupContacts;
+        }
+        else
+        {
+            filteredGroupContacts = groupContacts
+                .Where(c => c.Name.Contains(groupSearchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        
+        // Apply current sorting
+        SortGroups(groupSortColumn);
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        FilterContacts();
+    }
+
+    private void ClearGroupSearch()
+    {
+        groupSearchQuery = "";
+        FilterGroups();
+    }
+
+    private async Task DeleteContact(Contact contact)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete '{contact.Name}'?"))
+        {
+            try
+            {
+                DbContext.Contacts.Remove(contact);
+                await DbContext.SaveChangesAsync();
+                await LoadContacts();
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"Error deleting contact: {ex.Message}");
+            }
+        }
+    }
+
+    private DateTime GetNextBirthday(DateTime birthdayDate)
+    {
+        var today = DateTime.Today;
+        var nextBirthday = new DateTime(today.Year, birthdayDate.Month, birthdayDate.Day);
+        
+        if (nextBirthday < today)
+        {
+            nextBirthday = nextBirthday.AddYears(1);
+        }
+        
+        return nextBirthday;
+    }
+
+    private void SortContacts(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        filteredIndividualContacts = sortColumn switch
+        {
+            "Name" => sortAscending 
+                ? filteredIndividualContacts.OrderBy(c => c.Name).ToList()
+                : filteredIndividualContacts.OrderByDescending(c => c.Name).ToList(),
+            
+            "PhoneNumber" => sortAscending
+                ? filteredIndividualContacts.OrderBy(c => c.PhoneNumber).ToList()
+                : filteredIndividualContacts.OrderByDescending(c => c.PhoneNumber).ToList(),
+            
+            "Birthday" => sortAscending
+                ? filteredIndividualContacts.OrderBy(c => c.Birthdays.FirstOrDefault()?.BirthDate ?? DateTime.MaxValue).ToList()
+                : filteredIndividualContacts.OrderByDescending(c => c.Birthdays.FirstOrDefault()?.BirthDate ?? DateTime.MinValue).ToList(),
+            
+            "NextBirthday" => sortAscending
+                ? filteredIndividualContacts.OrderBy(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    return birthday != null ? GetNextBirthday(birthday.BirthDate) : DateTime.MaxValue;
+                }).ToList()
+                : filteredIndividualContacts.OrderByDescending(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    return birthday != null ? GetNextBirthday(birthday.BirthDate) : DateTime.MinValue;
+                }).ToList(),
+            
+            "SendTo" => sortAscending
+                ? filteredIndividualContacts.OrderBy(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    if (birthday == null) return "zzz"; // No birthday (last)
+                    var groupName = GetSendToGroupName(birthday.SendToGroupId);
+                    return string.IsNullOrEmpty(groupName) ? c.Name : groupName; // Sort by recipient name
+                }).ToList()
+                : filteredIndividualContacts.OrderByDescending(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    if (birthday == null) return ""; // No birthday (last when descending)
+                    var groupName = GetSendToGroupName(birthday.SendToGroupId);
+                    return string.IsNullOrEmpty(groupName) ? c.Name : groupName; // Sort by recipient name
+                }).ToList(),
+            
+            "Status" => sortAscending
+                ? filteredIndividualContacts.OrderBy(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    if (birthday == null) return 1; // No Birthday (middle)
+                    return birthday.IsEnabled ? 0 : 2; // Active (first), Disabled (last)
+                }).ToList()
+                : filteredIndividualContacts.OrderByDescending(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    if (birthday == null) return 1; // No Birthday (middle)
+                    return birthday.IsEnabled ? 0 : 2; // Active (last when descending), Disabled (first when descending)
+                }).ToList(),
+            
+            _ => filteredIndividualContacts
+        };
+    }
+
+    private void SortGroups(string column)
+    {
+        if (groupSortColumn == column)
+        {
+            groupSortAscending = !groupSortAscending;
+        }
+        else
+        {
+            groupSortColumn = column;
+            groupSortAscending = true;
+        }
+
+        filteredGroupContacts = groupSortColumn switch
+        {
+            "Name" => groupSortAscending 
+                ? filteredGroupContacts.OrderBy(c => c.Name).ToList()
+                : filteredGroupContacts.OrderByDescending(c => c.Name).ToList(),
+            
+            "Birthday" => groupSortAscending
+                ? filteredGroupContacts.OrderBy(c => c.Birthdays.FirstOrDefault()?.BirthDate ?? DateTime.MaxValue).ToList()
+                : filteredGroupContacts.OrderByDescending(c => c.Birthdays.FirstOrDefault()?.BirthDate ?? DateTime.MinValue).ToList(),
+            
+            "NextBirthday" => groupSortAscending
+                ? filteredGroupContacts.OrderBy(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    return birthday != null ? GetNextBirthday(birthday.BirthDate) : DateTime.MaxValue;
+                }).ToList()
+                : filteredGroupContacts.OrderByDescending(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    return birthday != null ? GetNextBirthday(birthday.BirthDate) : DateTime.MinValue;
+                }).ToList(),
+            
+            "Status" => groupSortAscending
+                ? filteredGroupContacts.OrderBy(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    if (birthday == null) return 1; // No Birthday (middle)
+                    return birthday.IsEnabled ? 0 : 2; // Active (first), Disabled (last)
+                }).ToList()
+                : filteredGroupContacts.OrderByDescending(c => 
+                {
+                    var birthday = c.Birthdays.FirstOrDefault();
+                    if (birthday == null) return 1; // No Birthday (middle)
+                    return birthday.IsEnabled ? 0 : 2; // Active (last when descending), Disabled (first when descending)
+                }).ToList(),
+            
+            _ => filteredGroupContacts
+        };
+    }
+}

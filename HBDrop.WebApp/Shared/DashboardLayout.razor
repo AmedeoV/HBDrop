@@ -1,0 +1,61 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+
+<PageTitle>HBDrop - Birthday Wishes Automation</PageTitle>
+
+<div class="dashboard-layout">
+    <!-- Top Navigation Bar -->
+    <nav class="dashboard-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <a href="/dashboard" class="navbar-brand">
+                        <span style="font-size: 1.5rem;">🎂</span>
+                        <span class="fw-bold">HBDrop</span>
+                    </a>
+                    <div class="nav-links d-none d-md-flex gap-3">
+                        <a href="/dashboard" class="nav-link">Dashboard</a>
+                        <a href="/contacts" class="nav-link">Contacts</a>
+                        <a href="/messages" class="nav-link">Messages</a>
+                        <a href="/whatsapp/connect" class="nav-link">WhatsApp</a>
+                    </div>
+                </div>
+                <div>
+                    <AuthorizeView>
+                        <Authorized>
+                            <div class="d-flex align-items-center gap-3">
+                                <AuthorizeView Roles="Admin" Context="adminLink">
+                                    <Authorized>
+                                        <a href="/admin" class="btn btn-sm btn-warning">🛡️ Admin</a>
+                                    </Authorized>
+                                </AuthorizeView>
+                                <a href="/settings" class="btn btn-sm btn-outline-secondary">⚙️ Settings</a>
+                                <form method="post" action="/Identity/Account/Logout" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">🚪 Logout</button>
+                                </form>
+                            </div>
+                        </Authorized>
+                        <NotAuthorized>
+                            <a href="/Identity/Account/Login" class="btn btn-primary">Sign In</a>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="dashboard-main">
+        @Body
+    </main>
+
+    <!-- Footer -->
+    <footer class="dashboard-footer">
+        <div class="container">
+            <p class="text-center text-muted mb-0">
+                &copy; @DateTime.Now.Year HBDrop - Never forget a birthday again! 🎉
+            </p>
+        </div>
+    </footer>
+</div>

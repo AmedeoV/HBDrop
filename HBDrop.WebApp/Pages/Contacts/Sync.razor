@@ -1,0 +1,408 @@
+@page "/contacts/sync"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject IWhatsAppService WhatsAppService
+@inject NavigationManager Navigation
+
+<PageTitle>Sync WhatsApp Contacts - HBDrop</PageTitle>
+
+<div class="sync-container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header -->
+            <div class="mb-4">
+                <h2>🔄 Sync WhatsApp Chats</h2>
+                <p class="text-muted">Import contacts from your recent WhatsApp conversations</p>
+                <div class="alert alert-warning">
+                    <strong>⚠️ WhatsApp API Limitation:</strong> WhatsApp does not provide access to your contact list for privacy reasons.
+                    <div class="mt-3">
+                        <strong>✅ Recommended Alternative:</strong>
+                        <a href="/contacts/import-from-group" class="btn btn-sm btn-success ms-2">
+                            <i class="bi bi-people-fill"></i> Import from WhatsApp Group
+                        </a>
+                        <p class="mt-2 mb-0 small">Import phone numbers from any WhatsApp group you're in - this method works perfectly!</p>
+                    </div>
+                </div>
+                <div class="alert alert-info">
+                    <strong>Other options:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li><strong>📅 Calendar Import (New!):</strong> <a href="/contacts/import-calendar">Import birthdays from iPhone/Android calendar</a> with smart auto-matching</li>
+                        <li><strong>Manual Entry:</strong> Add contacts individually with their phone numbers</li>
+                        <li><strong>vCard Import:</strong> Export contacts from your phone and import the vCard file</li>
+                        <li><strong>Groups:</strong> Send birthday wishes directly in WhatsApp groups</li>
+                    </ul>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">
+                    <strong>Error:</strong> @errorMessage
+                </div>
+            }
+
+            @if (syncStep == SyncStep.Load)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body text-center p-5">
+                        @if (isLoading)
+                        {
+                            <div class="spinner-border text-primary mb-3" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted">Fetching your WhatsApp contacts...</p>
+                        }
+                        else
+                        {
+                            <div class="mb-3" style="font-size: 4rem;">📇</div>
+                            <h4>Ready to Sync</h4>
+                            <p class="text-muted mb-4">
+                                This will fetch contacts from your recent WhatsApp conversations.
+                                <br/><small>Note: Only contacts you've recently chatted with will appear</small>
+                            </p>
+                            <button class="btn btn-primary btn-lg" @onclick="LoadContacts">
+                                <i class="bi bi-download"></i> Fetch WhatsApp Contacts
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-4">
+                    <h6><i class="bi bi-info-circle"></i> Note</h6>
+                    <ul class="mb-0">
+                        <li>Make sure WhatsApp is connected first</li>
+                        <li>This will only show contacts that are saved in your phone</li>
+                        <li>Birthday information is not stored in WhatsApp, so you'll need to add it manually</li>
+                        <li>Much faster than importing vCard files!</li>
+                    </ul>
+                </div>
+            }
+            else if (syncStep == SyncStep.Preview)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">📋 Select Contacts to Import</h5>
+                                <p class="text-muted mb-0">
+                                    Found <strong>@whatsappContacts.Count</strong> WhatsApp contacts
+                                </p>
+                            </div>
+                            <button class="btn btn-outline-secondary" @onclick="ResetSync">
+                                ← Back
+                            </button>
+                        </div>
+
+                        @if (whatsappContacts.Any())
+                        {
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Note:</strong> Select contacts you want to add. You'll be able to add their birthdays after importing.
+                            </div>
+
+                            <div class="mb-3">
+                                <input type="text" class="form-control" placeholder="🔍 Search contacts..." @bind="searchQuery" @bind:event="oninput" @onkeyup="FilterContacts" />
+                            </div>
+
+                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                <table class="table table-hover">
+                                    <thead class="sticky-top bg-white">
+                                        <tr>
+                                            <th style="width: 50px;">
+                                                <input type="checkbox" @onchange="ToggleSelectAll" checked="@selectAll" />
+                                            </th>
+                                            <th>Name</th>
+                                            <th>Phone Number</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var contact in filteredContacts)
+                                        {
+                                            <tr class="@(contact.AlreadyExists ? "table-secondary" : "")">
+                                                <td>
+                                                    <input type="checkbox" @bind="contact.IsSelected" disabled="@contact.AlreadyExists" />
+                                                </td>
+                                                <td>
+                                                    <strong>@contact.Name</strong>
+                                                    @if (!string.IsNullOrEmpty(contact.VerifiedName) && contact.VerifiedName != contact.Name)
+                                                    {
+                                                        <br/><small class="text-muted">(@contact.VerifiedName)</small>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <code>+@contact.Phone</code>
+                                                </td>
+                                                <td>
+                                                    @if (contact.AlreadyExists)
+                                                    {
+                                                        <span class="badge bg-secondary">Already imported</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-success">Ready to import</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="mt-3 p-3 bg-light rounded">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@whatsappContacts.Count(c => c.IsSelected) contacts selected</strong>
+                                        <p class="mb-0 small text-muted">Birthdays can be added later by editing each contact</p>
+                                    </div>
+                                    <button class="btn btn-primary" @onclick="ImportSelectedContacts" disabled="@(!whatsappContacts.Any(c => c.IsSelected) || isImporting)">
+                                        @if (isImporting)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                            <span>Importing...</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-check-circle"></i>
+                                            <span>Import Selected</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning">
+                                <strong>No recent chats found.</strong> 
+                                <p class="mb-2 mt-2">WhatsApp only syncs contacts from recent conversations. To add contacts:</p>
+                                <ul class="mb-0">
+                                    <li>Start a conversation with the contact on WhatsApp, then sync again</li>
+                                    <li>Use <a href="/contacts/add" class="alert-link">Manual Entry</a> to add contacts directly</li>
+                                    <li>Use <a href="/contacts/import" class="alert-link">vCard Import</a> to bulk import contacts</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (syncStep == SyncStep.Complete)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-body p-5 text-center">
+                        <div class="success-icon-large mb-3">✅</div>
+                        <h3 class="mb-3">Import Successful!</h3>
+                        <p class="text-muted mb-4">
+                            <strong>@importedCount</strong> contacts were successfully imported.
+                            <br/>You can now add birthday information to each contact.
+                        </p>
+                        
+                        <div class="d-flex gap-3 justify-content-center">
+                            <button class="btn btn-primary" @onclick="ViewContacts">
+                                View Contacts
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="ImportMore">
+                                Import More
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private enum SyncStep
+    {
+        Load,
+        Preview,
+        Complete
+    }
+
+    private class ContactViewModel
+    {
+        public string Name { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string? VerifiedName { get; set; }
+        public bool IsSelected { get; set; } = true;
+        public bool AlreadyExists { get; set; }
+    }
+
+    private SyncStep syncStep = SyncStep.Load;
+    private List<ContactViewModel> whatsappContacts = new();
+    private List<ContactViewModel> filteredContacts = new();
+    private bool isLoading = false;
+    private bool isImporting = false;
+    private bool selectAll = true;
+    private int importedCount = 0;
+    private string errorMessage = "";
+    private string searchQuery = "";
+    private string? userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var applicationUser = await UserManager.GetUserAsync(user);
+        if (applicationUser != null)
+        {
+            userId = applicationUser.Id;
+        }
+    }
+
+    private async Task LoadContacts()
+    {
+        isLoading = true;
+        errorMessage = "";
+
+        try
+        {
+            var contacts = await WhatsAppService.GetContactsAsync();
+
+            if (!contacts.Any())
+            {
+                errorMessage = @"⚠️ WhatsApp API Limitation: The WhatsApp API does not provide access to your phone's contact list for privacy reasons. 
+                
+Alternative ways to add contacts:
+• Manual Entry: Add contacts one by one with their phone numbers
+• vCard Import: Export contacts from your phone as a .vcf file and import it
+• Groups: Send birthday wishes in WhatsApp groups (no individual contacts needed)
+
+Note: This is a WhatsApp platform restriction, not a limitation of HBDrop.";
+                return;
+            }
+
+            // Check which contacts already exist
+            var existingPhones = await DbContext.Contacts
+                .Where(c => c.UserId == userId)
+                .Select(c => c.PhoneNumber.Replace("+", "").Replace("-", "").Replace(" ", ""))
+                .ToListAsync();
+
+            whatsappContacts = contacts.Select(c => new ContactViewModel
+            {
+                Name = c.Name,
+                Phone = c.Phone,
+                VerifiedName = c.VerifiedName,
+                IsSelected = true,
+                AlreadyExists = existingPhones.Contains(c.Phone.Replace("+", "").Replace("-", "").Replace(" ", ""))
+            }).ToList();
+
+            // Deselect contacts that already exist
+            foreach (var contact in whatsappContacts.Where(c => c.AlreadyExists))
+            {
+                contact.IsSelected = false;
+            }
+
+            filteredContacts = whatsappContacts;
+            syncStep = SyncStep.Preview;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load contacts: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterContacts()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filteredContacts = whatsappContacts;
+        }
+        else
+        {
+            filteredContacts = whatsappContacts
+                .Where(c => c.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                           c.Phone.Contains(searchQuery))
+                .ToList();
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        selectAll = (bool)(e.Value ?? false);
+        foreach (var contact in whatsappContacts.Where(c => !c.AlreadyExists))
+        {
+            contact.IsSelected = selectAll;
+        }
+    }
+
+    private async Task ImportSelectedContacts()
+    {
+        isImporting = true;
+        importedCount = 0;
+
+        try
+        {
+            var selectedContacts = whatsappContacts.Where(c => c.IsSelected && !c.AlreadyExists).ToList();
+
+            foreach (var waContact in selectedContacts)
+            {
+                var contact = new Contact
+                {
+                    UserId = userId!,
+                    Name = waContact.Name,
+                    PhoneNumber = "+" + waContact.Phone,
+                    IsGroup = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                DbContext.Contacts.Add(contact);
+                importedCount++;
+            }
+
+            await DbContext.SaveChangesAsync();
+            syncStep = SyncStep.Complete;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error importing contacts: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private void ResetSync()
+    {
+        syncStep = SyncStep.Load;
+        whatsappContacts.Clear();
+        filteredContacts.Clear();
+        errorMessage = "";
+        searchQuery = "";
+    }
+
+    private void ImportMore()
+    {
+        syncStep = SyncStep.Load;
+        whatsappContacts.Clear();
+        filteredContacts.Clear();
+        importedCount = 0;
+        errorMessage = "";
+        searchQuery = "";
+    }
+
+    private void ViewContacts()
+    {
+        Navigation.NavigateTo("/contacts");
+    }
+}

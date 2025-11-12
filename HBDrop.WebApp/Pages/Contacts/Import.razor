@@ -1,0 +1,725 @@
+@page "/contacts/import"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>Import Contacts - HBDrop</PageTitle>
+
+<div class="import-container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header -->
+            <div class="mb-4">
+                <h2>📥 Import Contacts</h2>
+                <p class="text-muted">Import contacts from your phone's vCard (.vcf) export file</p>
+                
+                <div class="alert alert-success">
+                    <strong>💡 New Feature:</strong> Looking to import birthdays? Try our 
+                    <a href="/contacts/import-calendar" class="alert-link fw-bold">
+                        <i class="bi bi-calendar-check"></i> Calendar Import
+                    </a> 
+                    feature! It imports birthdays from iPhone/Android calendars with smart auto-matching.
+                </div>
+            </div>
+
+            @if (importStep == ImportStep.Upload)
+            {
+                <!-- Upload Section -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body p-4">
+                        <h5 class="card-title mb-3">📱 How to Export from Your Phone</h5>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <div class="export-guide">
+                                    <h6><strong>iPhone / iCloud</strong></h6>
+                                    <ol class="export-steps">
+                                        <li>Go to <strong>iCloud.com</strong></li>
+                                        <li>Open <strong>Contacts</strong></li>
+                                        <li>Select all contacts (Cmd+A)</li>
+                                        <li>Click gear icon ⚙️ → <strong>Export vCard</strong></li>
+                                    </ol>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="export-guide">
+                                    <h6><strong>Android / Google</strong></h6>
+                                    <ol class="export-steps">
+                                        <li>Go to <strong>contacts.google.com</strong></li>
+                                        <li>Click <strong>Export</strong></li>
+                                        <li>Select <strong>All contacts</strong></li>
+                                        <li>Choose <strong>vCard format</strong></li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Upload -->
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <h5 class="card-title mb-3">📂 Upload vCard File</h5>
+                        
+                        <div class="upload-area" @ondragover="HandleDragOver" @ondrop="HandleDrop">
+                            <InputFile OnChange="HandleFileSelected" accept=".vcf" class="d-none" id="fileInput" />
+                            <label for="fileInput" class="upload-label">
+                                @if (isUploading)
+                                {
+                                    <div class="spinner-border text-primary mb-3" role="status">
+                                        <span class="visually-hidden">Processing...</span>
+                                    </div>
+                                    <p class="mb-0">Processing file...</p>
+                                }
+                                else
+                                {
+                                    <div class="upload-icon">📁</div>
+                                    <p class="mb-2"><strong>Click to browse</strong> or drag and drop</p>
+                                    <small class="text-muted">Supports .vcf files from iPhone and Android</small>
+                                }
+                            </label>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">
+                                <strong>Error:</strong> @errorMessage
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (importStep == ImportStep.Preview)
+            {
+                <!-- Preview Section -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="card-title mb-1">📋 Preview Contacts</h5>
+                                <p class="text-muted mb-0">
+                                    Found <strong>@parsedContacts.Count</strong> contacts 
+                                    (@parsedContacts.Count(c => c.BirthdayDate.HasValue) with birthdays, 
+                                    @parsedContacts.Count(c => !c.BirthdayDate.HasValue) without)
+                                </p>
+                            </div>
+                            <button class="btn btn-outline-secondary" @onclick="ResetImport">
+                                ← Back to Upload
+                            </button>
+                        </div>
+
+                        @if (parsedContacts.Any())
+                        {
+                            @if (parsedContacts.Any(c => !c.BirthdayDate.HasValue))
+                            {
+                                <div class="alert alert-info mb-3">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>Note:</strong> Contacts without birthdays will be imported, and you can add their birthday information later by editing the contact.
+                                </div>
+                            }
+                            
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 50px;">
+                                                <input type="checkbox" @onchange="ToggleSelectAll" checked="@selectAll" />
+                                            </th>
+                                            <th>Name</th>
+                                            <th>Phone Number</th>
+                                            <th>Birthday</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var contact in parsedContacts)
+                                        {
+                                            <tr class="@(contact.IsValid ? "" : "table-warning")">
+                                                <td>
+                                                    <input type="checkbox" @bind="contact.IsSelected" disabled="@(!contact.IsValid)" />
+                                                </td>
+                                                <td>@contact.Name</td>
+                                                <td>@contact.PhoneNumber</td>
+                                                <td>
+                                                    @if (contact.BirthdayDate.HasValue)
+                                                    {
+                                                        @contact.BirthdayDate.Value.ToString("MMM dd, yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted fst-italic">Not set</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    @if (!contact.IsValid)
+                                                    {
+                                                        <span class="badge bg-warning text-dark">@contact.ValidationError</span>
+                                                    }
+                                                    else if (contact.IsDuplicate)
+                                                    {
+                                                        <span class="badge bg-info">Already exists</span>
+                                                    }
+                                                    else if (!contact.BirthdayDate.HasValue)
+                                                    {
+                                                        <span class="badge bg-secondary">No birthday</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-success">Ready</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Timezone Settings -->
+                            <div class="alert alert-info mt-4">
+                                <h6 class="mb-3">⏰ Timezone & Send Time Settings</h6>
+                                
+                                @if (!string.IsNullOrEmpty(userDefaultTimezone))
+                                {
+                                    <div class="alert alert-success mb-3">
+                                        <strong>✓ Using your default settings:</strong> @userDefaultTimezone at @FormatHour(userDefaultHour)
+                                        <br/>
+                                        <small>You can override this below if these contacts are in a different timezone.</small>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-warning mb-3">
+                                        <strong>⚠️ No default timezone set!</strong> 
+                                        <a href="/settings" class="alert-link">Set your default timezone</a> or select one below.
+                                    </div>
+                                }
+
+                                <div class="row g-3">
+                                    <div class="col-md-8">
+                                        <label class="form-label">
+                                            Contact's Timezone 
+                                            <small class="text-muted">(optional - leave blank to use your default)</small>
+                                        </label>
+                                        <select class="form-select" @bind="selectedTimeZone">
+                                            <option value="">Use my default timezone</option>
+                                            @foreach (var tz in commonTimeZones)
+                                            {
+                                                <option value="@tz.Id">@tz.DisplayName</option>
+                                            }
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            Only change this if these contacts are in a different timezone than you.
+                                        </small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            Send Time
+                                            <small class="text-muted">(optional)</small>
+                                        </label>
+                                        <select class="form-select" @bind="preferredHour">
+                                            <option value="-1">Use my default (@FormatHour(userDefaultHour))</option>
+                                            @for (int hour = 0; hour < 24; hour++)
+                                            {
+                                                <option value="@hour">@FormatHour(hour)</option>
+                                            }
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            Time to send birthday wishes
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <div class="alert alert-danger mt-3">
+                                    <strong>Error:</strong> @errorMessage
+                                </div>
+                            }
+
+                            <div class="d-flex justify-content-between align-items-center mt-4">
+                                <div>
+                                    <p class="mb-0">
+                                        <strong>@parsedContacts.Count(c => c.IsSelected && c.IsValid)</strong> contacts selected for import
+                                    </p>
+                                </div>
+                                <button class="btn btn-primary btn-lg" @onclick="ImportContacts" disabled="@(!parsedContacts.Any(c => c.IsSelected && c.IsValid) || isImporting)">
+                                    @if (isImporting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>Importing @importedCount of @parsedContacts.Count(c => c.IsSelected && c.IsValid)...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>✓ Import Selected Contacts</span>
+                                    }
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning">
+                                <strong>No contacts found.</strong> The uploaded file doesn't contain any valid contacts.
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (importStep == ImportStep.Complete)
+            {
+                <!-- Success Section -->
+                <div class="card shadow-sm">
+                    <div class="card-body p-5 text-center">
+                        <div class="success-icon-large mb-3">✅</div>
+                        <h3 class="mb-3">Import Successful!</h3>
+                        <p class="text-muted mb-4">
+                            <strong>@importedCount</strong> contacts were successfully imported.
+                        </p>
+                        
+                        <div class="d-flex gap-3 justify-content-center">
+                            <button class="btn btn-primary" @onclick="GoToDashboard">
+                                Go to Dashboard
+                            </button>
+                            <button class="btn btn-outline-primary" @onclick="ViewContacts">
+                                View Contacts
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="ImportMore">
+                                Import More
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private enum ImportStep
+    {
+        Upload,
+        Preview,
+        Complete
+    }
+
+    private class ParsedContact
+    {
+        public string Name { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public DateTime? BirthdayDate { get; set; }
+        public bool IsSelected { get; set; } = true;
+        public bool IsValid { get; set; } = true;
+        public bool IsDuplicate { get; set; }
+        public string ValidationError { get; set; } = "";
+    }
+
+    private class TimeZoneOption
+    {
+        public string Id { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+    }
+
+    private ImportStep importStep = ImportStep.Upload;
+    private List<ParsedContact> parsedContacts = new();
+    private bool isUploading = false;
+    private bool isImporting = false;
+    private bool selectAll = true;
+    private int importedCount = 0;
+    private string errorMessage = "";
+    private string? userId;
+    private string selectedTimeZone = "";
+    private int preferredHour = -1; // -1 means use user default
+    private string userDefaultTimezone = "";
+    private int userDefaultHour = 9;
+
+    // Common timezones for easy selection
+    private List<TimeZoneOption> commonTimeZones = new()
+    {
+        new() { Id = "Europe/Dublin", DisplayName = "🇮🇪 Ireland (Dublin) - GMT/IST" },
+        new() { Id = "Europe/London", DisplayName = "🇬🇧 United Kingdom (London) - GMT/BST" },
+        new() { Id = "Europe/Paris", DisplayName = "🇫🇷 France (Paris) - CET/CEST" },
+        new() { Id = "Europe/Berlin", DisplayName = "🇩🇪 Germany (Berlin) - CET/CEST" },
+        new() { Id = "America/New_York", DisplayName = "🇺🇸 USA (New York) - EST/EDT" },
+        new() { Id = "America/Chicago", DisplayName = "🇺🇸 USA (Chicago) - CST/CDT" },
+        new() { Id = "America/Denver", DisplayName = "🇺🇸 USA (Denver) - MST/MDT" },
+        new() { Id = "America/Los_Angeles", DisplayName = "🇺🇸 USA (Los Angeles) - PST/PDT" },
+        new() { Id = "America/Toronto", DisplayName = "🇨🇦 Canada (Toronto) - EST/EDT" },
+        new() { Id = "America/Vancouver", DisplayName = "🇨🇦 Canada (Vancouver) - PST/PDT" },
+        new() { Id = "Australia/Sydney", DisplayName = "🇦🇺 Australia (Sydney) - AEST/AEDT" },
+        new() { Id = "Australia/Melbourne", DisplayName = "🇦🇺 Australia (Melbourne) - AEST/AEDT" },
+        new() { Id = "Asia/Tokyo", DisplayName = "🇯🇵 Japan (Tokyo) - JST" },
+        new() { Id = "Asia/Shanghai", DisplayName = "🇨🇳 China (Shanghai) - CST" },
+        new() { Id = "Asia/Dubai", DisplayName = "🇦🇪 UAE (Dubai) - GST" },
+        new() { Id = "Asia/Singapore", DisplayName = "🇸🇬 Singapore - SGT" },
+        new() { Id = "Asia/Kolkata", DisplayName = "🇮🇳 India (Kolkata) - IST" },
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var applicationUser = await UserManager.GetUserAsync(user);
+        if (applicationUser != null)
+        {
+            userId = applicationUser.Id;
+            
+            // Load user's default timezone settings
+            userDefaultTimezone = applicationUser.DefaultTimeZoneId ?? "";
+            userDefaultHour = applicationUser.DefaultMessageHour;
+        }
+    }
+
+    private void HandleDragOver()
+    {
+        // Allow drop
+    }
+
+    private async Task HandleDrop()
+    {
+        // Handled by InputFile
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        errorMessage = "";
+        isUploading = true;
+
+        try
+        {
+            var file = e.File;
+            
+            if (file == null)
+            {
+                errorMessage = "No file selected.";
+                return;
+            }
+
+            if (!file.Name.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "Please upload a .vcf (vCard) file.";
+                return;
+            }
+
+            // Read file content
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB max
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            // Parse vCard
+            await ParseVCardFile(content);
+
+            if (parsedContacts.Any())
+            {
+                importStep = ImportStep.Preview;
+            }
+            else
+            {
+                errorMessage = "No valid contacts found in the file.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error processing file: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private async Task ParseVCardFile(string content)
+    {
+        parsedContacts.Clear();
+
+        try
+        {
+            // Simple vCard parser - parse line by line
+            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            
+            string? currentName = null;
+            string? currentPhone = null;
+            DateTime? currentBirthday = null;
+            
+            foreach (var line in lines)
+            {
+                var trimmedLine = line.Trim();
+                
+                if (trimmedLine.StartsWith("BEGIN:VCARD"))
+                {
+                    // Reset for new vCard
+                    currentName = null;
+                    currentPhone = null;
+                    currentBirthday = null;
+                }
+                else if (trimmedLine.StartsWith("FN:"))
+                {
+                    currentName = trimmedLine.Substring(3).Trim();
+                }
+                else if (trimmedLine.StartsWith("N:") && string.IsNullOrWhiteSpace(currentName))
+                {
+                    // Fallback to N: if FN: not found
+                    var nameParts = trimmedLine.Substring(2).Split(';');
+                    if (nameParts.Length >= 2)
+                    {
+                        currentName = $"{nameParts[1]} {nameParts[0]}".Trim();
+                    }
+                }
+                else if (trimmedLine.StartsWith("TEL") || trimmedLine.StartsWith("tel"))
+                {
+                    // Only use first phone number found per contact
+                    if (string.IsNullOrWhiteSpace(currentPhone))
+                    {
+                        // TEL;TYPE=CELL:+123456789 or TEL:+123456789
+                        var colonIndex = trimmedLine.IndexOf(':');
+                        if (colonIndex > 0)
+                        {
+                            var phone = trimmedLine.Substring(colonIndex + 1).Trim();
+                            // Clean phone number
+                            if (!string.IsNullOrWhiteSpace(phone))
+                            {
+                                currentPhone = phone;
+                            }
+                        }
+                    }
+                }
+                else if (trimmedLine.StartsWith("BDAY:"))
+                {
+                    var bdayStr = trimmedLine.Substring(5).Trim();
+                    // BDAY format: YYYYMMDD or YYYY-MM-DD or --MMDD (no year)
+                    if (DateTime.TryParseExact(bdayStr, new[] { "yyyyMMdd", "yyyy-MM-dd", "yyyy/MM/dd" }, 
+                        null, System.Globalization.DateTimeStyles.None, out DateTime parsedDate))
+                    {
+                        currentBirthday = parsedDate;
+                    }
+                    else if (bdayStr.StartsWith("--") && bdayStr.Length >= 6)
+                    {
+                        // Format: --MMDD (no year, use a default year like 1900)
+                        var monthDay = bdayStr.Substring(2);
+                        if (DateTime.TryParseExact($"1900{monthDay}", "yyyyMMdd", 
+                            null, System.Globalization.DateTimeStyles.None, out DateTime parsedNoYear))
+                        {
+                            currentBirthday = parsedNoYear;
+                        }
+                    }
+                }
+                else if (trimmedLine.StartsWith("END:VCARD"))
+                {
+                    // End of vCard - process contact
+                    if (!string.IsNullOrWhiteSpace(currentName))
+                    {
+                        var contact = new ParsedContact
+                        {
+                            Name = currentName,
+                            PhoneNumber = currentPhone ?? "",
+                            BirthdayDate = currentBirthday,
+                            IsSelected = false, // Don't auto-select, let user choose
+                            IsValid = true
+                        };
+
+                        // Mark as invalid only if missing phone number
+                        if (string.IsNullOrWhiteSpace(contact.PhoneNumber))
+                        {
+                            contact.IsValid = false;
+                            contact.ValidationError = "Missing phone number";
+                            contact.IsSelected = false;
+                        }
+                        else
+                        {
+                            contact.IsSelected = true; // Auto-select valid contacts
+                        }
+
+                        parsedContacts.Add(contact);
+                    }
+                    
+                    // Reset for next vCard
+                    currentName = null;
+                    currentPhone = null;
+                    currentBirthday = null;
+                }
+            }
+            
+            // After parsing, check for duplicates in batch
+            var phoneNumbers = parsedContacts
+                .Where(c => !string.IsNullOrWhiteSpace(c.PhoneNumber))
+                .Select(c => c.PhoneNumber)
+                .ToList();
+            
+            var existingPhones = await DbContext.Contacts
+                .Where(c => c.UserId == userId && phoneNumbers.Contains(c.PhoneNumber))
+                .Select(c => c.PhoneNumber)
+                .ToListAsync();
+            
+            foreach (var contact in parsedContacts)
+            {
+                if (existingPhones.Contains(contact.PhoneNumber))
+                {
+                    contact.IsDuplicate = true;
+                    contact.IsSelected = false;
+                }
+            }
+            
+            Console.WriteLine($"Parsed {parsedContacts.Count} contacts from vCard");
+            Console.WriteLine($"Valid: {parsedContacts.Count(c => c.IsValid)}, Invalid: {parsedContacts.Count(c => !c.IsValid)}, Duplicates: {parsedContacts.Count(c => c.IsDuplicate)}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Parse error: {ex}");
+            throw new Exception($"Error parsing vCard: {ex.Message}");
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        selectAll = (bool)(e.Value ?? false);
+        foreach (var contact in parsedContacts.Where(c => c.IsValid && !c.IsDuplicate))
+        {
+            contact.IsSelected = selectAll;
+        }
+    }
+
+    private async Task ImportContacts()
+    {
+        isImporting = true;
+        importedCount = 0;
+        errorMessage = "";
+
+        try
+        {
+            var contactsToImport = parsedContacts
+                .Where(c => c.IsSelected && c.IsValid && !c.IsDuplicate)
+                .ToList();
+
+            if (!contactsToImport.Any())
+            {
+                errorMessage = "No contacts selected for import.";
+                isImporting = false;
+                return;
+            }
+
+            Console.WriteLine($"Importing {contactsToImport.Count} contacts...");
+
+            foreach (var parsedContact in contactsToImport)
+            {
+                try
+                {
+                    // Determine which timezone and hour to use
+                    var timezoneToUse = string.IsNullOrWhiteSpace(selectedTimeZone) 
+                        ? userDefaultTimezone 
+                        : selectedTimeZone;
+                    
+                    var hourToUse = preferredHour == -1 
+                        ? userDefaultHour 
+                        : preferredHour;
+
+                    // Create Contact
+                    var contact = new Contact
+                    {
+                        UserId = userId!,
+                        Name = parsedContact.Name.Trim(),
+                        PhoneNumber = parsedContact.PhoneNumber.Trim(),
+                        TimeZoneId = string.IsNullOrWhiteSpace(timezoneToUse) ? null : timezoneToUse,
+                        PreferredMessageHour = hourToUse,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    DbContext.Contacts.Add(contact);
+                    await DbContext.SaveChangesAsync(); // Save to get the contact ID
+
+                    // Create Birthday only if birthday date exists
+                    if (parsedContact.BirthdayDate.HasValue)
+                    {
+                        var birthday = new Birthday
+                        {
+                            ContactId = contact.Id,
+                            BirthDate = parsedContact.BirthdayDate.Value,
+                            IsEnabled = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        DbContext.Birthdays.Add(birthday);
+                        await DbContext.SaveChangesAsync(); // Save birthday
+                    }
+                    
+                    importedCount++;
+                    Console.WriteLine($"Imported: {contact.Name} ({contact.PhoneNumber})");
+                    
+                    // Update UI every 5 contacts
+                    if (importedCount % 5 == 0)
+                    {
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error importing {parsedContact.Name}: {ex.Message}");
+                    // Continue with next contact even if one fails
+                }
+            }
+
+            if (importedCount > 0)
+            {
+                importStep = ImportStep.Complete;
+            }
+            else
+            {
+                errorMessage = "Failed to import contacts. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error importing contacts: {ex.Message}";
+            Console.WriteLine($"Import error: {ex}");
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private void ResetImport()
+    {
+        importStep = ImportStep.Upload;
+        parsedContacts.Clear();
+        errorMessage = "";
+    }
+
+    private void ImportMore()
+    {
+        importStep = ImportStep.Upload;
+        parsedContacts.Clear();
+        importedCount = 0;
+        errorMessage = "";
+    }
+
+    private void GoToDashboard()
+    {
+        Navigation.NavigateTo("/dashboard");
+    }
+
+    private void ViewContacts()
+    {
+        Navigation.NavigateTo("/contacts");
+    }
+
+    private string FormatHour(int hour)
+    {
+        if (hour == 0) return "12:00 AM (Midnight)";
+        if (hour == 12) return "12:00 PM (Noon)";
+        if (hour < 12) return $"{hour}:00 AM";
+        return $"{hour - 12}:00 PM";
+    }
+}

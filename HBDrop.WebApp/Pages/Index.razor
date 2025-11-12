@@ -1,0 +1,271 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@layout LandingLayout
+@inject NavigationManager Navigation
+@using HBDrop.WebApp.Shared
+
+<!-- Hero Section -->
+<div class="landing-hero">
+    <div class="hero-content">
+        <div class="emoji-large">🎂 🎉 🎈</div>
+        <h1 class="hero-title">HBDrop</h1>
+        <p class="hero-subtitle">Never forget a birthday again!</p>
+        <p style="font-size: 1.2rem; margin-bottom: 2rem;">
+            Automatically send personalized WhatsApp birthday wishes to your loved ones
+        </p>
+        <div>
+            <a href="/Identity/Account/Register" class="btn-birthday" style="text-decoration: none; display: inline-block;">
+                Get Started Free 🚀
+            </a>
+            <a href="#demo-section" class="btn-secondary-birthday ms-3" style="text-decoration: none; display: inline-block;">
+                See Demo
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<section class="features-section">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="display-4 fw-bold" style="color: var(--birthday-dark);">Why Choose HBDrop?</h2>
+            <p class="lead text-muted">The easiest way to stay connected on special days</p>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3 class="feature-title">Fully Automated</h3>
+                    <p class="feature-description">
+                        Set it and forget it! HBDrop automatically sends birthday wishes at the perfect time, 
+                        every year. No more last-minute scrambles or forgotten birthdays.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <h3 class="feature-title">WhatsApp Integration</h3>
+                    <p class="feature-description">
+                        Send messages directly through WhatsApp - the platform your friends and family already use. 
+                        Personal, instant, and familiar.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">✨</div>
+                    <h3 class="feature-title">Personalized Messages</h3>
+                    <p class="feature-description">
+                        Customize each birthday message with the person's name, age, and your own special touch. 
+                        Make every message feel unique and heartfelt.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">Secure & Private</h3>
+                    <p class="feature-description">
+                        Your data is encrypted with military-grade AES-256 encryption. 
+                        Your contacts and messages are safe and private.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">�</div>
+                    <h3 class="feature-title">Calendar Import</h3>
+                    <p class="feature-description">
+                        Import birthdays directly from your iPhone, Android, or Google Calendar. 
+                        Smart matching finds your contacts automatically!
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">�📱</div>
+                    <h3 class="feature-title">Easy Setup</h3>
+                    <p class="feature-description">
+                        Connect in seconds with a simple QR code scan. Add your contacts, set their birthdays, 
+                        and you're done! No complicated configuration.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3 class="feature-title">Track Everything</h3>
+                    <p class="feature-description">
+                        See which messages were sent, delivered, and read. 
+                        Keep track of upcoming birthdays and message history.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Demo Section -->
+<section class="demo-section" id="demo-section">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="display-4 fw-bold" style="color: var(--birthday-dark);">See It In Action</h2>
+            <p class="lead text-muted">Watch how HBDrop sends automatic birthday wishes</p>
+        </div>
+        
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <AnimatedDemo ContactName="Sarah Johnson" Age="25" />
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="ps-lg-5 mt-4 mt-lg-0">
+                    <h3 class="fw-bold mb-4">How It Works</h3>
+                    
+                    <div class="d-flex mb-4">
+                        <div class="me-3">
+                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" 
+                                 style="width: 50px; height: 50px; font-size: 1.5rem;">
+                                1
+                            </div>
+                        </div>
+                        <div>
+                            <h5>Add Your Contacts</h5>
+                            <p class="text-muted">Import or manually add friends and family with their birthdays</p>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex mb-4">
+                        <div class="me-3">
+                            <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center" 
+                                 style="width: 50px; height: 50px; font-size: 1.5rem;">
+                                2
+                            </div>
+                        </div>
+                        <div>
+                            <h5>Customize Messages</h5>
+                            <p class="text-muted">Create personalized birthday messages for each contact</p>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex mb-4">
+                        <div class="me-3">
+                            <div class="rounded-circle bg-warning text-white d-flex align-items-center justify-content-center" 
+                                 style="width: 50px; height: 50px; font-size: 1.5rem;">
+                                3
+                            </div>
+                        </div>
+                        <div>
+                            <h5>Sit Back & Relax</h5>
+                            <p class="text-muted">HBDrop automatically sends wishes on their special day</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Section -->
+<section class="stats-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Reliable Delivery</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number">∞</div>
+                    <div class="stat-label">Unlimited Messages</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number">24/7</div>
+                    <div class="stat-label">Automated Service</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-number">🔒</div>
+                    <div class="stat-label">Encrypted & Secure</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="cta-title">Ready to Never Miss a Birthday?</h2>
+        <p class="lead mb-4">Join HBDrop today and make every birthday special</p>
+        <a href="/Identity/Account/Register" class="btn-birthday" style="text-decoration: none; display: inline-block;">
+            Start Now - It's Free! 🎉
+        </a>
+        <p class="mt-3 opacity-75">No credit card required • Set up in 2 minutes</p>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer style="background: #2d3748; color: white; padding: 60px 0 20px;">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <h3 style="color: var(--birthday-pink); display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                    <span style="font-size: 2rem;">🎂</span> HBDrop
+                </h3>
+                <p class="text-light">Never miss a birthday again. Automatically send personalized WhatsApp wishes to your loved ones.</p>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <h5 class="mb-3" style="color: var(--birthday-coral);">Quick Links</h5>
+                <ul class="list-unstyled">
+                    <li class="mb-2"><a href="#demo-section" style="color: white; text-decoration: none; opacity: 0.8;">Demo</a></li>
+                    <li class="mb-2"><a href="/Identity/Account/Register" style="color: white; text-decoration: none; opacity: 0.8;">Sign Up</a></li>
+                    <li class="mb-2"><a href="/Identity/Account/Login" style="color: white; text-decoration: none; opacity: 0.8;">Sign In</a></li>
+                </ul>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <h5 class="mb-3" style="color: var(--birthday-mint);">Get Started</h5>
+                <p class="mb-3">Ready to automate your birthday wishes?</p>
+                <a href="/Identity/Account/Register" class="btn-birthday">
+                    Create Free Account
+                </a>
+            </div>
+        </div>
+        
+        <hr style="border-color: rgba(255, 255, 255, 0.1); margin: 40px 0 20px;" />
+        
+        <div class="text-center" style="opacity: 0.7;">
+            <p class="mb-0">&copy; 2025 HBDrop. Never miss a birthday again! 🎉</p>
+        </div>
+    </div>
+</footer>
+
+@code {
+    private void GetStarted()
+    {
+        Navigation.NavigateTo("/Identity/Account/Register");
+    }
+    
+    private void ScrollToDemo()
+    {
+        // Scroll to demo section
+        Navigation.NavigateTo("/#demo-section");
+    }
+}
+

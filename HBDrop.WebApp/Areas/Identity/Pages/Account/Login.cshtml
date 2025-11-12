@@ -1,0 +1,49 @@
+﻿@page
+@model LoginModel
+
+@{
+    ViewData["Title"] = "Sign In";
+}
+
+<div class="auth-header">
+    <div class="birthday-icon">🎂</div>
+    <h1>Welcome Back!</h1>
+    <p>Sign in to manage your birthday celebrations</p>
+</div>
+
+<form id="account" method="post">
+    <div asp-validation-summary="ModelOnly" class="validation-summary-errors" role="alert"></div>
+    
+    <div class="form-floating mb-3">
+        <input asp-for="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
+        <label asp-for="Input.Email" class="form-label">Email</label>
+        <span asp-validation-for="Input.Email" class="text-danger"></span>
+    </div>
+    
+    <div class="form-floating mb-3">
+        <input asp-for="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
+        <label asp-for="Input.Password" class="form-label">Password</label>
+        <span asp-validation-for="Input.Password" class="text-danger"></span>
+    </div>
+    
+    <div class="form-check mb-3">
+        <input class="form-check-input" asp-for="Input.RememberMe" />
+        <label class="form-check-label" asp-for="Input.RememberMe">
+            @Html.DisplayNameFor(m => m.Input.RememberMe)
+        </label>
+    </div>
+    
+    <div class="d-grid">
+        <button id="login-submit" type="submit" class="btn btn-primary btn-lg">Sign In</button>
+    </div>
+    
+    <div class="auth-links">
+        <a id="forgot-password" asp-page="./ForgotPassword">Forgot your password?</a>
+        <span class="mx-2">•</span>
+        <a asp-page="./Register" asp-route-returnUrl="@Model.ReturnUrl">Create account</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

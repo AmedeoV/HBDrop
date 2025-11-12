@@ -1,0 +1,591 @@
+@page "/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
+@* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
+@layout DashboardLayout
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject IWhatsAppService WhatsAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Dashboard - HBDrop</PageTitle>
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>🎉 Welcome back, @userName!</h1>
+        <p class="text-muted">Manage your birthday wishes and contacts</p>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Stats Cards -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-info">
+                    <h3>@totalContacts</h3>
+                    <p>Total Contacts</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">🎂</div>
+                <div class="stat-info">
+                    <h3>@upcomingBirthdays</h3>
+                    <p>Upcoming Birthdays</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">📨</div>
+                <div class="stat-info">
+                    <h3>@messagesSent</h3>
+                    <p>Messages Sent</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card whatsapp-status @(isWhatsAppConnected ? "connected" : "")">
+                <div class="stat-icon">📱</div>
+                <div class="stat-info">
+                    <h3>@(isWhatsAppConnected ? "Connected" : "Not Connected")</h3>
+                    <p>WhatsApp Status</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">⚡ Quick Actions</h5>
+                    <div class="d-flex gap-3 flex-wrap">
+                        <a href="/contacts/add" class="btn btn-success">
+                            <i class="bi bi-plus-circle"></i> Add Contact
+                        </a>
+                        <a href="/whatsapp/connect" class="btn btn-success">
+                            <i class="bi bi-whatsapp"></i> Connect WhatsApp
+                        </a>
+                        <a href="/contacts/import-calendar" class="btn btn-primary">
+                            <i class="bi bi-calendar-check"></i> Import Calendar
+                        </a>
+                        <a href="/contacts/import" class="btn btn-outline-primary">
+                            <i class="bi bi-upload"></i> Import vCard
+                        </a>
+                        <a href="/contacts" class="btn btn-outline-primary">
+                            <i class="bi bi-people"></i> View All Contacts
+                        </a>
+                        <a href="/messages" class="btn btn-outline-secondary">
+                            <i class="bi bi-chat-dots"></i> Message History
+                        </a>
+                        @if (isWhatsAppConnected)
+                        {
+                            <button class="btn btn-outline-info" @onclick="ShowTestMessageModal">
+                                <i class="bi bi-send"></i> Send Test Message
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Message Modal -->
+    @if (showTestModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">📱 Send Test Message</h5>
+                        <button type="button" class="btn-close" @onclick="CloseTestModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (!string.IsNullOrEmpty(testSuccessMessage))
+                        {
+                            <div class="alert alert-success">
+                                <strong>✓ Success!</strong> @testSuccessMessage
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(testErrorMessage))
+                        {
+                            <div class="alert alert-danger">
+                                <strong>✗ Error:</strong> @testErrorMessage
+                            </div>
+                        }
+
+                        <!-- Destination Type Toggle -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Send To</label>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" 
+                                        class="btn @(sendToGroup ? "btn-outline-primary" : "btn-primary")" 
+                                        @onclick="() => { sendToGroup = false; selectedTestGroup = null; }">
+                                    📱 Phone Number
+                                </button>
+                                <button type="button" 
+                                        class="btn @(sendToGroup ? "btn-primary" : "btn-outline-primary")" 
+                                        @onclick="ToggleSendToGroup"
+                                        disabled="@(availableGroups.Count == 0)">
+                                    👥 WhatsApp Group
+                                </button>
+                            </div>
+                            @if (availableGroups.Count == 0)
+                            {
+                                <div class="form-text text-muted">
+                                    <small>No WhatsApp groups available. Connect WhatsApp to sync groups.</small>
+                                </div>
+                            }
+                        </div>
+
+                        @if (sendToGroup)
+                        {
+                            <!-- Group Selection -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Select Group</label>
+                                
+                                @if (selectedTestGroup == null)
+                                {
+                                    <div class="alert alert-info border-primary">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <i class="bi bi-info-circle"></i> <strong>No group selected</strong>
+                                                <p class="mb-0 small text-muted mt-1">Choose a WhatsApp group to send the test message</p>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-primary" @onclick="ShowGroupSelector">
+                                                <i class="bi bi-search"></i> Select Group
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-success border-success">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <i class="bi bi-check-circle"></i> <strong>Send to group: @selectedTestGroup.Name</strong>
+                                                <p class="mb-0 small text-muted mt-1">Message will be sent to this WhatsApp group</p>
+                                            </div>
+                                            <div>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" @onclick="ShowGroupSelector">
+                                                    <i class="bi bi-arrow-repeat"></i> Change Group
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="RemoveTestGroup">
+                                                    <i class="bi bi-x-circle"></i> Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @* Group Selector Modal *@
+                                @if (showGroupSelector)
+                                {
+                                    <div class="card border-primary mb-3">
+                                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                            <span><i class="bi bi-search"></i> Select a WhatsApp Group</span>
+                                            <button type="button" class="btn-close btn-close-white" @onclick="() => showGroupSelector = false"></button>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <input type="text" 
+                                                       class="form-control" 
+                                                       placeholder="Search groups..." 
+                                                       @bind="groupSearchTerm" 
+                                                       @bind:event="oninput"
+                                                       @bind:after="FilterTestGroups" />
+                                            </div>
+                                            <div style="max-height: 200px; overflow-y: auto;">
+                                                @if (filteredTestGroups.Any())
+                                                {
+                                                    <div class="list-group">
+                                                        @foreach (var group in filteredTestGroups)
+                                                        {
+                                                            <button type="button" 
+                                                                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                                    @onclick="() => SelectTestGroup(group)">
+                                                                <span>
+                                                                    <i class="bi bi-people-fill text-primary"></i> @group.Name
+                                                                </span>
+                                                                <i class="bi bi-chevron-right"></i>
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-center text-muted py-3">
+                                                        <i class="bi bi-search"></i>
+                                                        <p class="mb-0">No groups found matching "@groupSearchTerm"</p>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- Phone Number Input -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Your Phone Number</label>
+                                <input type="text" class="form-control" @bind="testPhoneNumber" placeholder="+1234567890" />
+                                <div class="form-text">Include country code (e.g., +353 for Ireland, +1 for USA)</div>
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Test Message</label>
+                            <textarea class="form-control" @bind="testMessage" rows="4" placeholder="Enter your test message..."></textarea>
+                        </div>
+
+                        <div class="alert alert-info mb-0">
+                            <small>
+                                <strong>💡 Tip:</strong> This will send a test message to @(sendToGroup ? "the selected group" : "your own number") to verify WhatsApp is working correctly.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseTestModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="SendTestMessage" disabled="@isSendingTest">
+                            @if (isSendingTest)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Sending...</span>
+                            }
+                            else
+                            {
+                                <span>📤 Send Test</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Upcoming Birthdays -->
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">🎂 Upcoming Birthdays (Next 7 Days)</h5>
+                    <div class="empty-state">
+                        <div class="empty-icon">🎈</div>
+                        <p>No upcoming birthdays in the next 7 days.</p>
+                        <a href="/contacts/add" class="btn btn-sm btn-primary">Add Your First Contact</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">📊 Recent Activity</h5>
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <p>No recent activity yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Getting Started Guide -->
+    <div class="row g-4 mt-2">
+        <div class="col-12">
+            <div class="card getting-started">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">🚀 Getting Started</h5>
+                    <div class="steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h6>Connect WhatsApp</h6>
+                                <p>Scan the QR code to connect your WhatsApp account</p>
+                                <a href="/whatsapp/connect" class="btn btn-sm btn-success">Connect Now</a>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h6>Add Contacts</h6>
+                                <p>Add your friends and family with their birthdays</p>
+                                <a href="/contacts/create" class="btn btn-sm btn-primary">Add Contact</a>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h6>Sit Back & Relax</h6>
+                                <p>We'll automatically send birthday wishes for you!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string userName = "";
+    private bool isWhatsAppConnected = false;
+    private bool showTestModal = false;
+    private bool isSendingTest = false;
+    private string testPhoneNumber = "";
+    private string testMessage = "🎉 This is a test message from HBDrop! If you're seeing this, your birthday automation is working perfectly! 🎂";
+    private string testSuccessMessage = "";
+    private string testErrorMessage = "";
+    private string? userId;
+    
+    // Test message group options
+    private bool sendToGroup = false;
+    private List<Contact> availableGroups = new();
+    private Contact? selectedTestGroup = null;
+    private bool showGroupSelector = false;
+    private string groupSearchTerm = "";
+    private List<Contact> filteredTestGroups = new();
+    
+    // Statistics
+    private int totalContacts = 0;
+    private int upcomingBirthdays = 0;
+    private int messagesSent = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Redirect to landing page if not authenticated
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            NavigationManager.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        var applicationUser = await UserManager.GetUserAsync(user);
+        if (applicationUser != null)
+        {
+            userId = applicationUser.Id;
+            
+            // Extract first name from email if no display name is set
+            userName = string.IsNullOrEmpty(applicationUser.UserName) 
+                ? "Friend" 
+                : applicationUser.UserName.Split('@')[0];
+            
+            // Load statistics
+            await LoadStatistics();
+            
+            // Check WhatsApp connection status
+            try
+            {
+                var status = await WhatsAppService.GetConnectionStatusAsync(applicationUser.Id);
+                isWhatsAppConnected = status?.IsConnected ?? false;
+            }
+            catch
+            {
+                isWhatsAppConnected = false;
+            }
+        }
+    }
+    
+    private async Task LoadStatistics()
+    {
+        if (string.IsNullOrEmpty(userId)) return;
+        
+        try
+        {
+            // Total contacts (excluding WhatsApp groups if you want only individual contacts)
+            totalContacts = await DbContext.Contacts
+                .CountAsync(c => c.UserId == userId);
+            
+            // Upcoming birthdays in the next 30 days
+            var today = DateTime.UtcNow.Date;
+            var thirtyDaysFromNow = today.AddDays(30);
+            
+            upcomingBirthdays = await DbContext.Birthdays
+                .Include(b => b.Contact)
+                .Where(b => b.Contact.UserId == userId && b.IsEnabled)
+                .ToListAsync()
+                .ContinueWith(task =>
+                {
+                    var birthdays = task.Result;
+                    return birthdays.Count(b =>
+                    {
+                        var nextBirthday = GetNextBirthday(b.BirthDate);
+                        return nextBirthday >= today && nextBirthday <= thirtyDaysFromNow;
+                    });
+                });
+            
+            // Messages sent
+            messagesSent = await DbContext.Messages
+                .CountAsync(m => m.UserId == userId && m.Status == MessageStatus.Sent);
+        }
+        catch
+        {
+            // If there's an error loading stats, keep them at 0
+        }
+    }
+    
+    private DateTime GetNextBirthday(DateTime birthDate)
+    {
+        var today = DateTime.UtcNow.Date;
+        var thisYearBirthday = new DateTime(today.Year, birthDate.Month, birthDate.Day);
+        
+        if (thisYearBirthday >= today)
+            return thisYearBirthday;
+        else
+            return thisYearBirthday.AddYears(1);
+    }
+
+    private async Task ShowTestMessageModal()
+    {
+        showTestModal = true;
+        testSuccessMessage = "";
+        testErrorMessage = "";
+        
+        // Load available WhatsApp groups
+        if (!string.IsNullOrEmpty(userId))
+        {
+            availableGroups = await DbContext.Contacts
+                .Where(c => c.UserId == userId && c.IsGroup == true)
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+            
+            filteredTestGroups = availableGroups;
+        }
+    }
+
+    private void CloseTestModal()
+    {
+        showTestModal = false;
+        testSuccessMessage = "";
+        testErrorMessage = "";
+        sendToGroup = false;
+        selectedTestGroup = null;
+        showGroupSelector = false;
+        groupSearchTerm = "";
+    }
+
+    private async Task SendTestMessage()
+    {
+        // Validate inputs based on destination type
+        if (sendToGroup)
+        {
+            if (selectedTestGroup == null)
+            {
+                testErrorMessage = "Please select a group";
+                return;
+            }
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(testPhoneNumber))
+            {
+                testErrorMessage = "Please enter a phone number";
+                return;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(testMessage))
+        {
+            testErrorMessage = "Please enter a test message";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            testErrorMessage = "User not authenticated";
+            return;
+        }
+
+        isSendingTest = true;
+        testSuccessMessage = "";
+        testErrorMessage = "";
+
+        try
+        {
+            var destination = sendToGroup ? selectedTestGroup!.GroupId! : testPhoneNumber;
+            var success = await WhatsAppService.SendMessageAsync(destination, testMessage);
+            
+            if (success)
+            {
+                var destinationName = sendToGroup ? selectedTestGroup!.Name : testPhoneNumber;
+                testSuccessMessage = $"Test message sent successfully to {destinationName}! Check your WhatsApp.";
+                // Clear the form after 2 seconds and close modal
+                await Task.Delay(2000);
+                CloseTestModal();
+            }
+            else
+            {
+                testErrorMessage = "Failed to send test message. Please check your WhatsApp connection.";
+            }
+        }
+        catch (Exception ex)
+        {
+            testErrorMessage = $"Error sending message: {ex.Message}";
+        }
+        finally
+        {
+            isSendingTest = false;
+        }
+    }
+    
+    private void ToggleSendToGroup()
+    {
+        sendToGroup = !sendToGroup;
+        testSuccessMessage = "";
+        testErrorMessage = "";
+    }
+    
+    private void ShowGroupSelector()
+    {
+        showGroupSelector = true;
+        groupSearchTerm = "";
+        filteredTestGroups = availableGroups;
+    }
+    
+    private void FilterTestGroups()
+    {
+        if (string.IsNullOrWhiteSpace(groupSearchTerm))
+        {
+            filteredTestGroups = availableGroups;
+        }
+        else
+        {
+            filteredTestGroups = availableGroups
+                .Where(g => g.Name.Contains(groupSearchTerm, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+    
+    private void SelectTestGroup(Contact group)
+    {
+        selectedTestGroup = group;
+        showGroupSelector = false;
+        groupSearchTerm = "";
+        testSuccessMessage = "";
+        testErrorMessage = "";
+    }
+    
+    private void RemoveTestGroup()
+    {
+        selectedTestGroup = null;
+        testSuccessMessage = "";
+        testErrorMessage = "";
+    }
+}
+
+

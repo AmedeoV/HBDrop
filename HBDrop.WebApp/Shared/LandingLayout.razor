@@ -1,0 +1,121 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HBDrop - Never Miss a Birthday Again</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link href="css/birthday-theme.css" rel="stylesheet" />
+    <link href="css/demo-animations.css" rel="stylesheet" />
+    <style>
+        .landing-navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px 0;
+        }
+        
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--birthday-pink);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .navbar-brand:hover {
+            color: var(--birthday-coral);
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .btn-nav-signin {
+            padding: 8px 24px;
+            border: 2px solid var(--birthday-pink);
+            background: transparent;
+            color: var(--birthday-pink);
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-nav-signin:hover {
+            background: var(--birthday-pink);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.3);
+        }
+        
+        .btn-nav-register {
+            padding: 8px 24px;
+            background: linear-gradient(135deg, var(--birthday-pink) 0%, var(--birthday-coral) 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-nav-register:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.4);
+        }
+        
+        /* Remove body padding - hero section will handle spacing */
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="landing-navbar">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="/" class="navbar-brand">
+                    <span style="font-size: 2rem;">🎂</span>
+                    HBDrop
+                </a>
+                
+                <div class="nav-buttons">
+                    <a href="/Identity/Account/Login" class="btn-nav-signin">
+                        Sign In
+                    </a>
+                    <a href="/Identity/Account/Register" class="btn-nav-register">
+                        Get Started Free
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    @Body
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/demo.js"></script>
+</body>
+</html>
+
+@code {
+    // Layout for landing page with navigation
+}

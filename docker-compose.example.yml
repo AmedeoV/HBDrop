@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: hbdrop-postgres
+    environment:
+      POSTGRES_DB: hbdrop
+      POSTGRES_USER: hbdrop_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # Set in .env file
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hbdrop-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hbdrop_user -d hbdrop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Baileys WhatsApp Service (Node.js)
+  baileys:
+    build:
+      context: ./HBDrop.Baileys
+      dockerfile: Dockerfile
+    container_name: hbdrop-baileys
+    ports:
+      - "3000:3000"
+    volumes:
+      - baileys_auth:/app/auth_info
+    networks:
+      - hbdrop-network
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); });"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+  # HBDrop Web Application (ASP.NET Core Blazor)
+  webapp:
+    build:
+      context: .
+      dockerfile: HBDrop.WebApp/Dockerfile
+    container_name: hbdrop-webapp
+    ports:
+      - "5007:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      baileys:
+        condition: service_started
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=hbdrop;Username=hbdrop_user;Password=${POSTGRES_PASSWORD}
+      - Baileys__ApiUrl=http://baileys:3000
+      - Encryption__MasterKey=${ENCRYPTION_MASTER_KEY}
+    networks:
+      - hbdrop-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  baileys_auth:
+    driver: local
+
+networks:
+  hbdrop-network:
+    driver: bridge
