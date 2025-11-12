@@ -37,6 +37,12 @@ public class Birthday
     public string? CustomMessage { get; set; }
 
     /// <summary>
+    /// Optional: URL to a GIF image to send with the birthday message
+    /// </summary>
+    [MaxLength(1000)]
+    public string? GifUrl { get; set; }
+
+    /// <summary>
     /// Optional: WhatsApp Group ID where the birthday message should be sent
     /// If set, message will be sent to this group instead of directly to the contact
     /// </summary>

@@ -64,6 +64,12 @@ public class AdditionalBirthday
     public string? CustomMessage { get; set; }
 
     /// <summary>
+    /// Optional: URL to a GIF image to send with the birthday message
+    /// </summary>
+    [MaxLength(1000)]
+    public string? GifUrl { get; set; }
+
+    /// <summary>
     /// Where to send the birthday message: "Contact" (to the parent contact) or "Group" (to a WhatsApp group)
     /// </summary>
     [Required]

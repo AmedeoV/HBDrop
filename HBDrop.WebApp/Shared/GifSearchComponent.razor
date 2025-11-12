@@ -1,0 +1,239 @@
+@using HBDrop.WebApp.Services
+@using HBDrop.WebApp.Models
+@inject IGifSearchService GifSearchService
+
+<div class="gif-search-container">
+    @if (!showSearch && string.IsNullOrEmpty(SelectedGifUrl))
+    {
+        <button type="button" @onclick="ShowGifSearch" class="btn btn-outline-primary">
+            <i class="bi bi-image"></i> Add GIF
+        </button>
+    }
+    else
+    {
+        @if (showSearch)
+        {
+            <div class="gif-search-input">
+                <input type="text" @bind="searchQuery" @bind:event="oninput" 
+                       placeholder="Search for GIFs..." class="form-control" />
+                <button type="button" @onclick="SearchGifs" class="btn btn-primary">Search</button>
+                <button type="button" @onclick="LoadTrending" class="btn btn-secondary">Trending</button>
+                <button type="button" @onclick="HideGifSearch" class="btn btn-outline-secondary">Cancel</button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(SelectedGifUrl))
+        {
+            <button type="button" @onclick="ClearSelection" class="btn btn-outline-danger">
+                <i class="bi bi-x-circle"></i> Remove GIF
+            </button>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-2">@errorMessage</div>
+        }
+
+        @if (isLoading)
+        {
+            <div class="text-center mt-3">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        else if (searchResults != null && searchResults.Data.Any())
+        {
+            <div class="gif-results-grid">
+                @foreach (var gif in searchResults.Data)
+                {
+                    var previewUrl = gif.Images?.FixedHeightSmall?.Url ?? gif.Images?.PreviewGif?.Url ?? "";
+                    var fullUrl = gif.Images?.Original?.Url ?? "";
+                    
+                    <div class="gif-result-item @(SelectedGifUrl == fullUrl ? "selected" : "")" 
+                         @onclick="() => SelectGif(fullUrl, gif.Title)">
+                        @if (!string.IsNullOrEmpty(previewUrl))
+                        {
+                            <img src="@previewUrl" alt="@gif.Title" loading="lazy" />
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (searchResults.Pagination?.TotalCount > searchResults.Data.Count)
+            {
+                <div class="text-center mt-3">
+                    <button type="button" @onclick="LoadMore" class="btn btn-sm btn-outline-primary">
+                        Load More
+                    </button>
+                </div>
+            }
+        }
+        else if (!string.IsNullOrEmpty(searchQuery) && !isLoading && showSearch)
+        {
+            <div class="text-muted mt-3">No GIFs found. Try a different search term.</div>
+        }
+
+        @if (!string.IsNullOrEmpty(SelectedGifUrl))
+        {
+            <div class="selected-gif-preview mt-3">
+                <strong>Selected GIF:</strong>
+                <div class="mt-2">
+                    <img src="@SelectedGifUrl" alt="Selected GIF" style="max-width: 200px; border-radius: 8px;" />
+                </div>
+                <small class="text-muted d-block mt-1">@selectedGifTitle</small>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? SelectedGifUrl { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> SelectedGifUrlChanged { get; set; }
+
+    private string searchQuery = "";
+    private string selectedGifTitle = "";
+    private GiphySearchResponse? searchResults;
+    private bool isLoading = false;
+    private bool showSearch = false;
+    private string errorMessage = "";
+    private int currentOffset = 0;
+    private const int PageSize = 20;
+
+    protected override Task OnInitializedAsync()
+    {
+        // Don't load trending GIFs on initialization - only when user clicks "Add GIF"
+        return Task.CompletedTask;
+    }
+
+    private async Task ShowGifSearch()
+    {
+        showSearch = true;
+        await LoadTrending();
+    }
+
+    private void HideGifSearch()
+    {
+        showSearch = false;
+        searchResults = null;
+        searchQuery = "";
+        errorMessage = "";
+    }
+
+    private async Task SearchGifs()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            await LoadTrending();
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = "";
+        currentOffset = 0;
+
+        try
+        {
+            searchResults = await GifSearchService.SearchGifsAsync(searchQuery, PageSize, currentOffset);
+            if (searchResults == null)
+            {
+                errorMessage = "Failed to search GIFs. Please check your API key and try again.";
+            }
+            else if (searchResults.Data == null || !searchResults.Data.Any())
+            {
+                errorMessage = $"No GIFs found for '{searchQuery}'. Try a different search term.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error searching GIFs: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadTrending()
+    {
+        isLoading = true;
+        errorMessage = "";
+        searchQuery = "";
+        currentOffset = 0;
+
+        try
+        {
+            searchResults = await GifSearchService.GetTrendingGifsAsync(PageSize, currentOffset);
+            if (searchResults == null)
+            {
+                errorMessage = "Failed to load trending GIFs. Please check your API key and network connection.";
+            }
+            else if (searchResults.Data == null || !searchResults.Data.Any())
+            {
+                errorMessage = "No trending GIFs available at the moment.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading trending GIFs: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadMore()
+    {
+        if (searchResults == null) return;
+
+        currentOffset += PageSize;
+        isLoading = true;
+
+        try
+        {
+            GiphySearchResponse? moreResults;
+            
+            if (string.IsNullOrWhiteSpace(searchQuery))
+            {
+                moreResults = await GifSearchService.GetTrendingGifsAsync(PageSize, currentOffset);
+            }
+            else
+            {
+                moreResults = await GifSearchService.SearchGifsAsync(searchQuery, PageSize, currentOffset);
+            }
+
+            if (moreResults != null && moreResults.Data.Any())
+            {
+                searchResults.Data.AddRange(moreResults.Data);
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectGif(string gifUrl, string title)
+    {
+        SelectedGifUrl = gifUrl;
+        selectedGifTitle = title;
+        showSearch = false; // Hide search results after selection
+        searchResults = null;
+        await SelectedGifUrlChanged.InvokeAsync(gifUrl);
+    }
+
+    private async Task ClearSelection()
+    {
+        SelectedGifUrl = null;
+        selectedGifTitle = "";
+        showSearch = false;
+        searchResults = null;
+        searchQuery = "";
+        errorMessage = "";
+        await SelectedGifUrlChanged.InvokeAsync(null);
+    }
+}

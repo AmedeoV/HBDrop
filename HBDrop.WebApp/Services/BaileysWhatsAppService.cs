@@ -205,6 +205,11 @@ public class BaileysWhatsAppService : IWhatsAppService
 
     public async Task<bool> SendMessageAsync(string phoneNumber, string message)
     {
+        return await SendMessageAsync(phoneNumber, message, null);
+    }
+
+    public async Task<bool> SendMessageAsync(string phoneNumber, string message, string? gifUrl)
+    {
         try
         {
             var userId = await GetCurrentUserIdAsync();
@@ -213,7 +218,8 @@ public class BaileysWhatsAppService : IWhatsAppService
             var payload = new
             {
                 phone = phoneNumber,
-                message = message
+                message = message,
+                gifUrl = gifUrl
             };
 
             var response = await _httpClient.PostAsJsonAsync($"/send/{userId}", payload);
@@ -246,7 +252,7 @@ public class BaileysWhatsAppService : IWhatsAppService
     /// <summary>
     /// Send a WhatsApp message for a specific user (for background jobs without HttpContext)
     /// </summary>
-    public async Task<bool> SendMessageAsync(string userId, string phoneNumber, string message)
+    public async Task<bool> SendMessageAsync(string userId, string phoneNumber, string message, string? gifUrl = null)
     {
         try
         {
@@ -255,7 +261,8 @@ public class BaileysWhatsAppService : IWhatsAppService
             var payload = new
             {
                 phone = phoneNumber,
-                message = message
+                message = message,
+                gifUrl = gifUrl
             };
 
             var response = await _httpClient.PostAsJsonAsync($"/send/{userId}", payload);

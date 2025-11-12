@@ -389,7 +389,7 @@ app.get('/status/:userId', async (req, res) => {
 app.post('/send/:userId', async (req, res) => {
     try {
         const userId = req.params.userId;
-        const { phone, message } = req.body;
+        const { phone, message, gifUrl } = req.body;
         
         if (!phone || !message) {
             return res.status(400).json({ 
@@ -418,7 +418,27 @@ app.post('/send/:userId', async (req, res) => {
         }
         
         console.log(`[${userId}]  Sending message to ${phone}...`);
-        await session.sock.sendMessage(formattedPhone, { text: message });
+        
+        // If GIF URL is provided, send it first, then the text message
+        if (gifUrl) {
+            try {
+                console.log(`[${userId}]  Sending GIF from URL: ${gifUrl}`);
+                await session.sock.sendMessage(formattedPhone, {
+                    video: { url: gifUrl },
+                    gifPlayback: true,
+                    caption: message
+                });
+                console.log(`[${userId}]  GIF with caption sent successfully`);
+            } catch (gifError) {
+                console.error(`[${userId}]  Error sending GIF, falling back to text:`, gifError.message);
+                // Fallback to text-only message if GIF fails
+                await session.sock.sendMessage(formattedPhone, { text: message });
+            }
+        } else {
+            // Send text-only message
+            await session.sock.sendMessage(formattedPhone, { text: message });
+        }
+        
         console.log(`[${userId}]  Message sent successfully`);
         
         res.json({ 

@@ -33,12 +33,12 @@ public interface IWhatsAppService
     /// <summary>
     /// Send a WhatsApp message (uses current authenticated user from HttpContext)
     /// </summary>
-    Task<bool> SendMessageAsync(string phoneNumber, string message);
+    Task<bool> SendMessageAsync(string phoneNumber, string message, string? gifUrl = null);
 
     /// <summary>
     /// Send a WhatsApp message for a specific user (for background jobs)
     /// </summary>
-    Task<bool> SendMessageAsync(string userId, string phoneNumber, string message);
+    Task<bool> SendMessageAsync(string userId, string phoneNumber, string message, string? gifUrl = null);
 
     /// <summary>
     /// Get list of WhatsApp groups

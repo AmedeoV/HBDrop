@@ -97,7 +97,8 @@ public class BirthdayCheckerJob
                                 whatsAppService,
                                 userId,
                                 destinationNumber,
-                                message
+                                message,
+                                birthday.GifUrl
                             );
 
                             if (success)
@@ -201,7 +202,8 @@ public class BirthdayCheckerJob
         IWhatsAppService whatsAppService,
         string userId,
         string phoneNumber,
-        string message)
+        string message,
+        string? gifUrl = null)
     {
         try
         {
@@ -217,7 +219,7 @@ public class BirthdayCheckerJob
             }
 
             // Send message using the overload that accepts userId directly (for background jobs)
-            var success = await whatsAppService.SendMessageAsync(userId, phoneNumber, message);
+            var success = await whatsAppService.SendMessageAsync(userId, phoneNumber, message, gifUrl);
             return success;
         }
         catch (Exception ex)

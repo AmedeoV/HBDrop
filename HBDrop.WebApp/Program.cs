@@ -65,6 +65,7 @@ builder.Services.AddHangfireServer();
 builder.Services.AddHttpContextAccessor(); // Required for getting current user in services
 builder.Services.AddScoped<SessionEncryptionService>();
 builder.Services.AddHttpClient<IWhatsAppService, BaileysWhatsAppService>();
+builder.Services.AddHttpClient<IGifSearchService, GiphySearchService>();
 builder.Services.AddTransient<IEmailSender, EmailSender>();
 builder.Services.AddScoped<BirthdayCheckerJob>();
 builder.Services.AddScoped<CalendarImportService>();

@@ -57,6 +57,12 @@ public class CustomEvent
     public string? CustomMessage { get; set; }
 
     /// <summary>
+    /// Optional: URL to a GIF image to send with the event message
+    /// </summary>
+    [MaxLength(1000)]
+    public string? GifUrl { get; set; }
+
+    /// <summary>
     /// Optional: Send to a group instead of individual
     /// </summary>
     public int? GroupId { get; set; }
