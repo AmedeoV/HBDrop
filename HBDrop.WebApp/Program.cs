@@ -101,6 +101,11 @@ builder.Services.AddScoped<BirthdayCheckerJob>();
 builder.Services.AddScoped<CalendarImportService>();
 builder.Services.AddSingleton<RegionalEventsService>();
 
+// Add health checks
+builder.Services.AddHealthChecks()
+    .AddNpgSql(connectionString, name: "postgres")
+    .AddRedis(redisConnection, name: "redis");
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -121,6 +126,9 @@ app.UseRouting();
 // Add authentication and authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Map health check endpoint
+app.MapHealthChecks("/health");
 
 // Configure Hangfire dashboard
 app.UseHangfireDashboard("/hangfire", new DashboardOptions

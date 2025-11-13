@@ -19,6 +19,9 @@ RUN dotnet publish "HBDrop.WebApp.csproj" -c Release -o /app/publish /p:UseAppHo
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
+# Install wget for health checks
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
+
 # Copy published app
 COPY --from=publish /app/publish .
 
@@ -28,10 +31,6 @@ EXPOSE 8080
 # Set environment variables (HTTP only for Docker)
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl --fail http://localhost:8080/health || exit 1
 
 # Entry point
 ENTRYPOINT ["dotnet", "HBDrop.WebApp.dll"]
