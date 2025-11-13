@@ -98,6 +98,11 @@ namespace HBDrop.WebApp.Areas.Identity.Pages.Account
             [Display(Name = "Confirm password")]
             [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
             public string ConfirmPassword { get; set; }
+
+            /// <summary>
+            /// User's detected timezone from browser
+            /// </summary>
+            public string TimeZoneId { get; set; }
         }
 
 
@@ -114,6 +119,28 @@ namespace HBDrop.WebApp.Areas.Identity.Pages.Account
             if (ModelState.IsValid)
             {
                 var user = CreateUser();
+                
+                // Set the detected timezone
+                if (!string.IsNullOrWhiteSpace(Input.TimeZoneId))
+                {
+                    try
+                    {
+                        // Validate that the timezone is valid
+                        TimeZoneInfo.FindSystemTimeZoneById(Input.TimeZoneId);
+                        user.DefaultTimeZoneId = Input.TimeZoneId;
+                        _logger.LogInformation("Setting user timezone to: {TimeZone}", Input.TimeZoneId);
+                    }
+                    catch (TimeZoneNotFoundException)
+                    {
+                        _logger.LogWarning("Invalid timezone detected: {TimeZone}, using UTC", Input.TimeZoneId);
+                        user.DefaultTimeZoneId = "UTC";
+                    }
+                }
+                else
+                {
+                    // Default to UTC if no timezone detected
+                    user.DefaultTimeZoneId = "UTC";
+                }
 
                 await _userStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
                 await _emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);

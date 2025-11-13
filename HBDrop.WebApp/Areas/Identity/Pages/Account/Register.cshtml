@@ -31,6 +31,9 @@
         <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
     </div>
     
+    <!-- Hidden field for timezone detection -->
+    <input type="hidden" asp-for="Input.TimeZoneId" id="timeZoneInput" />
+    
     <div class="d-grid">
         <button id="registerSubmit" type="submit" class="btn btn-primary btn-lg">Create Account</button>
     </div>
@@ -43,4 +46,18 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Detect user's timezone using browser API
+        (function() {
+            try {
+                var timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                document.getElementById('timeZoneInput').value = timeZone;
+                console.log('Detected timezone:', timeZone);
+            } catch (e) {
+                console.error('Failed to detect timezone:', e);
+                // Fallback to UTC if detection fails
+                document.getElementById('timeZoneInput').value = 'UTC';
+            }
+        })();
+    </script>
 }
