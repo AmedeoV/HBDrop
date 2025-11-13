@@ -511,7 +511,8 @@
                     if (DateTime.TryParseExact(bdayStr, new[] { "yyyyMMdd", "yyyy-MM-dd", "yyyy/MM/dd" }, 
                         null, System.Globalization.DateTimeStyles.None, out DateTime parsedDate))
                     {
-                        currentBirthday = parsedDate;
+                        // Ensure DateTime is UTC for PostgreSQL
+                        currentBirthday = DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc);
                     }
                     else if (bdayStr.StartsWith("--") && bdayStr.Length >= 6)
                     {
@@ -520,7 +521,8 @@
                         if (DateTime.TryParseExact($"1900{monthDay}", "yyyyMMdd", 
                             null, System.Globalization.DateTimeStyles.None, out DateTime parsedNoYear))
                         {
-                            currentBirthday = parsedNoYear;
+                            // Ensure DateTime is UTC for PostgreSQL
+                            currentBirthday = DateTime.SpecifyKind(parsedNoYear, DateTimeKind.Utc);
                         }
                     }
                 }
