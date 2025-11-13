@@ -143,8 +143,24 @@
         {
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <!-- Search Box -->
+                    <!-- Search Box and Bulk Actions -->
                     <div class="mb-3">
+                        <div class="d-flex gap-2 mb-2">
+                            <button class="btn btn-sm btn-success" @onclick="() => BulkToggleMessages(true)" disabled="@isBulkUpdating">
+                                @if (isBulkUpdating)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                }
+                                <i class="bi bi-check-circle"></i> Enable All Messages
+                            </button>
+                            <button class="btn btn-sm btn-warning" @onclick="() => BulkToggleMessages(false)" disabled="@isBulkUpdating">
+                                @if (isBulkUpdating)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                }
+                                <i class="bi bi-x-circle"></i> Disable All Messages
+                            </button>
+                        </div>
                         <div class="input-group">
                             <span class="input-group-text">
                                 <i class="bi bi-search"></i>
@@ -534,6 +550,7 @@
     private bool isFetchingGroups = false;
     private string? fetchGroupsSuccessMessage = null;
     private string? fetchGroupsErrorMessage = null;
+    private bool isBulkUpdating = false;
     
     // Sorting for individual contacts
     private string sortColumn = "Name";
@@ -651,6 +668,62 @@
         
         var group = groupContacts.FirstOrDefault(g => g.GroupId == sendToGroupId);
         return group?.Name;
+    }
+
+    private async Task BulkToggleMessages(bool enable)
+    {
+        try
+        {
+            isBulkUpdating = true;
+            StateHasChanged();
+
+            // Get all birthdays, additional birthdays, and custom events for this user
+            var allBirthdays = await DbContext.Birthdays
+                .Where(b => b.Contact!.UserId == userId)
+                .ToListAsync();
+            
+            var allAdditionalBirthdays = await DbContext.AdditionalBirthdays
+                .Where(ab => ab.Contact!.UserId == userId)
+                .ToListAsync();
+            
+            var allCustomEvents = await DbContext.CustomEvents
+                .Where(ce => ce.Contact!.UserId == userId)
+                .ToListAsync();
+
+            // Update all birthdays
+            foreach (var birthday in allBirthdays)
+            {
+                birthday.IsEnabled = enable;
+            }
+
+            // Update all additional birthdays
+            foreach (var additionalBirthday in allAdditionalBirthdays)
+            {
+                additionalBirthday.IsEnabled = enable;
+            }
+
+            // Update all custom events
+            foreach (var customEvent in allCustomEvents)
+            {
+                customEvent.IsEnabled = enable;
+            }
+
+            await DbContext.SaveChangesAsync();
+            
+            // Reload contacts to reflect changes
+            await LoadContacts();
+            
+            var statusMessage = enable ? "All messages have been enabled." : "All messages have been disabled.";
+            await JSRuntime.InvokeVoidAsync("alert", statusMessage);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error updating messages: {ex.Message}");
+        }
+        finally
+        {
+            isBulkUpdating = false;
+        }
     }
 
     private void FilterContacts()
