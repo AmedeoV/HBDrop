@@ -32,6 +32,13 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "HBDrop_";
 });
 
+// Configure Data Protection to persist keys in Redis (prevents logout on redeploy)
+builder.Services.AddDataProtection()
+    .SetApplicationName("HBDrop")
+    .PersistKeysToStackExchangeRedis(
+        StackExchange.Redis.ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis") ?? "redis:6379"),
+        "HBDrop-DataProtection-Keys");
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
 
