@@ -377,6 +377,21 @@
                                             <textarea class="form-control" @bind="additionalBirthday.CustomMessage" rows="2"
                                                       placeholder="e.g., 🎉 Happy Birthday {Name}! Wishing you an amazing day!"></textarea>
                                             <div class="form-text">Use {Name} as placeholder for the person's name</div>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-primary mt-2" 
+                                                    @onclick="() => GenerateAIMessageForAdditionalBirthday(additionalBirthday)"
+                                                    disabled="@additionalBirthday.IsGeneratingMessage">
+                                                @if (additionalBirthday.IsGeneratingMessage)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                    <span>Generating...</span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-stars me-1"></i>
+                                                    <span>Generate with AI</span>
+                                                }
+                                            </button>
                                         </div>
 
                                         <div class="mb-3">
@@ -664,6 +679,21 @@
                                             <textarea class="form-control" @bind="customEvent.CustomMessage" rows="2"
                                                       placeholder="e.g., 🎉 Happy Father's Day! Thanks for everything you do!"></textarea>
                                             <div class="form-text">Leave blank to use the default message</div>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-primary mt-2" 
+                                                    @onclick="() => GenerateAIMessageForCustomEvent(customEvent)"
+                                                    disabled="@customEvent.IsGeneratingMessage">
+                                                @if (customEvent.IsGeneratingMessage)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                    <span>Generating...</span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-stars me-1"></i>
+                                                    <span>Generate with AI</span>
+                                                }
+                                            </button>
                                         </div>
 
                                         <div class="mb-3">
@@ -926,6 +956,7 @@
         public string MonthSearchQuery { get; set; } = "";
         public bool ShowGroupSearch { get; set; } = false;
         public string GroupSearchQuery { get; set; } = "";
+        public bool IsGeneratingMessage { get; set; } = false;
     }
 
     private List<AdditionalBirthdayModel> additionalBirthdays = new();
@@ -955,6 +986,7 @@
         public string MonthSearchQuery { get; set; } = "";
         public bool ShowGroupSearch { get; set; } = false;
         public string GroupSearchQuery { get; set; } = "";
+        public bool IsGeneratingMessage { get; set; } = false;
     }
 
     private List<CustomEventModel> customEvents = new();
@@ -1592,6 +1624,83 @@
         finally
         {
             isGeneratingMessage = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GenerateAIMessageForAdditionalBirthday(AdditionalBirthdayModel additionalBirthday)
+    {
+        if (additionalBirthday.IsGeneratingMessage) return;
+
+        try
+        {
+            additionalBirthday.IsGeneratingMessage = true;
+            StateHasChanged();
+
+            // Create event context based on relationship
+            var relationship = !string.IsNullOrWhiteSpace(additionalBirthday.Relationship)
+                ? additionalBirthday.Relationship.ToLower()
+                : "loved one";
+
+            var eventContext = $"birthday of {contactModel.Name}'s {relationship} named {additionalBirthday.Name}";
+
+            // Get notes from contact if available
+            var notes = contact?.Notes;
+
+            // Generate message
+            var generatedMessage = await AIMessageService.GenerateMessageAsync(
+                additionalBirthday.Name,
+                eventContext,
+                notes);
+
+            additionalBirthday.CustomMessage = generatedMessage;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to generate AI message: {ex.Message}";
+        }
+        finally
+        {
+            additionalBirthday.IsGeneratingMessage = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GenerateAIMessageForCustomEvent(CustomEventModel customEvent)
+    {
+        if (customEvent.IsGeneratingMessage) return;
+
+        try
+        {
+            customEvent.IsGeneratingMessage = true;
+            StateHasChanged();
+
+            // Get contact display name or first name
+            var displayName = !string.IsNullOrWhiteSpace(contactModel.DisplayName) 
+                ? contactModel.DisplayName 
+                : contactModel.Name.Split(' ').FirstOrDefault() ?? contactModel.Name;
+
+            // Determine event type from event name
+            var eventType = customEvent.EventName.ToLower();
+
+            // Get notes from contact if available
+            var notes = contact?.Notes;
+
+            // Generate message
+            var generatedMessage = await AIMessageService.GenerateMessageAsync(
+                displayName,
+                eventType,
+                notes);
+
+            customEvent.CustomMessage = generatedMessage;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to generate AI message: {ex.Message}";
+        }
+        finally
+        {
+            customEvent.IsGeneratingMessage = false;
             StateHasChanged();
         }
     }
