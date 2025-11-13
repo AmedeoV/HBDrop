@@ -250,6 +250,10 @@
 
         try
         {
+            // Store OLD values before updating (these are what contacts currently have)
+            oldTimeZoneId = currentUser.DefaultTimeZoneId;
+            oldMessageHour = currentUser.DefaultMessageHour;
+            
             // Check if timezone or message hour changed
             bool settingsChanged = currentUser.DefaultTimeZoneId != settingsModel.TimeZoneId ||
                                    currentUser.DefaultMessageHour != settingsModel.MessageHour;
