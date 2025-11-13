@@ -31,9 +31,7 @@
                                     </Authorized>
                                 </AuthorizeView>
                                 <a href="/settings" class="btn btn-sm btn-outline-secondary">⚙️ Settings</a>
-                                <form method="post" action="/Identity/Account/Logout" class="d-inline">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">🚪 Logout</button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="HandleLogout">🚪 Logout</button>
                             </div>
                         </Authorized>
                         <NotAuthorized>
@@ -59,3 +57,10 @@
         </div>
     </footer>
 </div>
+
+@code {
+    private void HandleLogout()
+    {
+        NavigationManager.NavigateTo("/Identity/Account/Logout", forceLoad: true);
+    }
+}
