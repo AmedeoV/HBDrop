@@ -68,7 +68,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label fw-bold">Phone Number <span class="text-danger">*</span></label>
-                                <InputText class="form-control" @bind-Value="contactModel.PhoneNumber" placeholder="e.g., +353899548661" />
+                                <InputText class="form-control" @bind-Value="contactModel.PhoneNumber" placeholder="e.g., +1234567890" />
                                 <div class="form-text">
                                     <i class="bi bi-info-circle"></i> Include country code (e.g., +353 for Ireland, +1 for USA)
                                 </div>
@@ -1360,24 +1360,27 @@
                     ? userDefaultHour 
                     : contactModel.MessageHour;
 
-                // Update Contact
-                contact.Name = contactModel.Name.Trim();
-                contact.PhoneNumber = contactModel.PhoneNumber.Trim();
-                contact.DisplayName = string.IsNullOrWhiteSpace(contactModel.DisplayName) ? null : contactModel.DisplayName.Trim();
-                contact.Email = string.IsNullOrWhiteSpace(contactModel.Email) ? null : contactModel.Email.Trim();
-                contact.Notes = string.IsNullOrWhiteSpace(contactModel.Notes) ? null : contactModel.Notes.Trim();
-                contact.TimeZoneId = string.IsNullOrWhiteSpace(timezoneToUse) ? null : timezoneToUse;
-                contact.PreferredMessageHour = hourToUse;
+                // Trim and prepare phone number for duplicate check
+                var trimmedPhoneNumber = contactModel.PhoneNumber.Trim();
 
                 // Check for duplicate phone number (excluding current contact)
                 var exists = await DbContext.Contacts
-                    .AnyAsync(c => c.UserId == userId && c.PhoneNumber == contact.PhoneNumber && c.Id != contact.Id);
+                    .AnyAsync(c => c.UserId == userId && c.PhoneNumber == trimmedPhoneNumber && c.Id != contact.Id);
                 
                 if (exists)
                 {
                     errorMessage = "A contact with this phone number already exists.";
                     return;
                 }
+
+                // Update Contact
+                contact.Name = contactModel.Name.Trim();
+                contact.PhoneNumber = trimmedPhoneNumber;
+                contact.DisplayName = string.IsNullOrWhiteSpace(contactModel.DisplayName) ? null : contactModel.DisplayName.Trim();
+                contact.Email = string.IsNullOrWhiteSpace(contactModel.Email) ? null : contactModel.Email.Trim();
+                contact.Notes = string.IsNullOrWhiteSpace(contactModel.Notes) ? null : contactModel.Notes.Trim();
+                contact.TimeZoneId = string.IsNullOrWhiteSpace(timezoneToUse) ? null : timezoneToUse;
+                contact.PreferredMessageHour = hourToUse;
 
                 // Update or Create Birthday
                 if (birthday == null)

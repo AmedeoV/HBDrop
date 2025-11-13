@@ -278,12 +278,79 @@
         <div class="col-md-8">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title mb-3">🎂 Upcoming Birthdays (Next 7 Days)</h5>
-                    <div class="empty-state">
-                        <div class="empty-icon">🎈</div>
-                        <p>No upcoming birthdays in the next 7 days.</p>
-                        <a href="/contacts/add" class="btn btn-sm btn-primary">Add Your First Contact</a>
-                    </div>
+                    <h5 class="card-title mb-3">🎂 Upcoming Birthdays & Events</h5>
+                    @if (!upcomingBirthdaysList.Any())
+                    {
+                        <div class="empty-state">
+                            <div class="empty-icon">🎈</div>
+                            <p>No upcoming birthdays or events.</p>
+                            <a href="/contacts/add" class="btn btn-sm btn-primary">Add Your First Contact</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group">
+                            @foreach (var item in upcomingBirthdaysList.Take(10))
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-start">
+                                    <div class="d-flex align-items-center flex-grow-1">
+                                        <div class="me-3">
+                                            @if (item.DaysUntil == 0)
+                                            {
+                                                <span class="badge bg-danger" style="font-size: 1.2rem; padding: 0.5rem 0.75rem;">TODAY</span>
+                                            }
+                                            else if (item.DaysUntil == 1)
+                                            {
+                                                <span class="badge bg-warning" style="font-size: 1rem; padding: 0.4rem 0.6rem;">Tomorrow</span>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-center">
+                                                    <div class="fw-bold" style="font-size: 1.2rem;">@item.DaysUntil</div>
+                                                    <small class="text-muted">days</small>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-center">
+                                                <h6 class="mb-0 me-2">@item.PersonName</h6>
+                                                @if (!string.IsNullOrEmpty(item.Relationship))
+                                                {
+                                                    <span class="badge bg-light text-dark">@item.Relationship</span>
+                                                }
+                                            </div>
+                                            <small class="text-muted">
+                                                @item.EventType
+                                                @if (!string.IsNullOrEmpty(item.ContactName))
+                                                {
+                                                    <span> • Contact: @item.ContactName</span>
+                                                }
+                                            </small>
+                                            <div class="text-muted">
+                                                <small>@item.Date.ToString("MMMM dd, yyyy")</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        @if (item.IsEnabled)
+                                        {
+                                            <span class="badge bg-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Disabled</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        @if (upcomingBirthdaysList.Count > 10)
+                        {
+                            <div class="text-center mt-3">
+                                <small class="text-muted">Showing 10 of @upcomingBirthdaysList.Count upcoming events</small>
+                            </div>
+                        }
+                    }
                 </div>
             </div>
         </div>
@@ -362,6 +429,20 @@
     private int totalContacts = 0;
     private int upcomingBirthdays = 0;
     private int messagesSent = 0;
+    
+    // Upcoming birthdays list
+    private List<UpcomingEventItem> upcomingBirthdaysList = new();
+    
+    private class UpcomingEventItem
+    {
+        public string PersonName { get; set; } = "";
+        public string? ContactName { get; set; }
+        public string? Relationship { get; set; }
+        public DateTime Date { get; set; }
+        public int DaysUntil { get; set; }
+        public string EventType { get; set; } = "";
+        public bool IsEnabled { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -411,23 +492,13 @@
             totalContacts = await DbContext.Contacts
                 .CountAsync(c => c.UserId == userId);
             
-            // Upcoming birthdays in the next 30 days
+            // Load upcoming birthdays and events
+            await LoadUpcomingEvents();
+            
+            // Count upcoming birthdays in the next 30 days
             var today = DateTime.UtcNow.Date;
             var thirtyDaysFromNow = today.AddDays(30);
-            
-            upcomingBirthdays = await DbContext.Birthdays
-                .Include(b => b.Contact)
-                .Where(b => b.Contact.UserId == userId && b.IsEnabled)
-                .ToListAsync()
-                .ContinueWith(task =>
-                {
-                    var birthdays = task.Result;
-                    return birthdays.Count(b =>
-                    {
-                        var nextBirthday = GetNextBirthday(b.BirthDate);
-                        return nextBirthday >= today && nextBirthday <= thirtyDaysFromNow;
-                    });
-                });
+            upcomingBirthdays = upcomingBirthdaysList.Count(e => e.Date <= thirtyDaysFromNow);
             
             // Messages sent
             messagesSent = await DbContext.Messages
@@ -436,6 +507,114 @@
         catch
         {
             // If there's an error loading stats, keep them at 0
+        }
+    }
+    
+    private async Task LoadUpcomingEvents()
+    {
+        if (string.IsNullOrEmpty(userId)) return;
+        
+        var today = DateTime.UtcNow.Date;
+        var eventsList = new List<UpcomingEventItem>();
+        
+        try
+        {
+            // Load main birthdays
+            var birthdays = await DbContext.Birthdays
+                .Include(b => b.Contact)
+                .Where(b => b.Contact.UserId == userId)
+                .ToListAsync();
+            
+            foreach (var birthday in birthdays)
+            {
+                var nextDate = GetNextBirthday(birthday.BirthDate);
+                var daysUntil = (int)(nextDate - today).TotalDays;
+                
+                eventsList.Add(new UpcomingEventItem
+                {
+                    PersonName = birthday.Contact.DisplayName ?? birthday.Contact.Name,
+                    ContactName = null,
+                    Relationship = null,
+                    Date = nextDate,
+                    DaysUntil = daysUntil,
+                    EventType = "Birthday 🎂",
+                    IsEnabled = birthday.IsEnabled
+                });
+            }
+            
+            // Load additional birthdays
+            var additionalBirthdays = await DbContext.AdditionalBirthdays
+                .Include(ab => ab.Contact)
+                .Where(ab => ab.Contact.UserId == userId)
+                .ToListAsync();
+            
+            foreach (var addBirthday in additionalBirthdays)
+            {
+                var birthDate = new DateTime(addBirthday.BirthYear ?? 2000, addBirthday.BirthMonth, addBirthday.BirthDay);
+                var nextDate = GetNextBirthday(birthDate);
+                var daysUntil = (int)(nextDate - today).TotalDays;
+                
+                eventsList.Add(new UpcomingEventItem
+                {
+                    PersonName = addBirthday.Name,
+                    ContactName = addBirthday.Contact.Name,
+                    Relationship = addBirthday.Relationship,
+                    Date = nextDate,
+                    DaysUntil = daysUntil,
+                    EventType = "Birthday 🎂",
+                    IsEnabled = addBirthday.IsEnabled
+                });
+            }
+            
+            // Load custom events
+            var customEvents = await DbContext.CustomEvents
+                .Include(ce => ce.Contact)
+                .Where(ce => ce.Contact.UserId == userId)
+                .ToListAsync();
+            
+            foreach (var customEvent in customEvents)
+            {
+                DateTime eventDate;
+                if (customEvent.EventYear.HasValue)
+                {
+                    // Specific year event (anniversary, etc.)
+                    eventDate = new DateTime(customEvent.EventYear.Value, customEvent.EventMonth, customEvent.EventDay);
+                    
+                    // Skip if the event date has passed
+                    if (eventDate < today)
+                        continue;
+                }
+                else
+                {
+                    // Recurring annual event
+                    eventDate = new DateTime(today.Year, customEvent.EventMonth, customEvent.EventDay);
+                    if (eventDate < today)
+                        eventDate = eventDate.AddYears(1);
+                }
+                
+                var daysUntil = (int)(eventDate - today).TotalDays;
+                
+                eventsList.Add(new UpcomingEventItem
+                {
+                    PersonName = customEvent.EventName,
+                    ContactName = customEvent.Contact.Name,
+                    Relationship = null,
+                    Date = eventDate,
+                    DaysUntil = daysUntil,
+                    EventType = customEvent.IsRegionalEvent ? $"{customEvent.RegionalEventType} 🎉" : "Custom Event 🎉",
+                    IsEnabled = customEvent.IsEnabled
+                });
+            }
+            
+            // Sort by date and take upcoming events
+            upcomingBirthdaysList = eventsList
+                .OrderBy(e => e.DaysUntil)
+                .ToList();
+        }
+        catch
+        {
+            // If there's an error, keep the list empty
+            upcomingBirthdaysList = new List<UpcomingEventItem>();
         }
     }
     

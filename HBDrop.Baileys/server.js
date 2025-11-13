@@ -289,7 +289,7 @@ app.post('/pairing-code/:userId', async (req, res) => {
         if (!phoneNumber) {
             return res.status(400).json({
                 success: false,
-                message: 'Phone number is required (e.g., "353899548661")'
+                message: 'Phone number is required (e.g., "1234567890")'
             });
         }
         

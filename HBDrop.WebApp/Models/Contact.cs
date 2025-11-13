@@ -38,7 +38,7 @@ public class Contact
     public string? DisplayName { get; set; }
 
     /// <summary>
-    /// WhatsApp phone number in international format (e.g., +353899548661)
+    /// WhatsApp phone number in international format (e.g., +1234567890)
     /// or WhatsApp group ID (e.g., 123456789-123456789@g.us)
     /// Optional - can be added later
     /// </summary>

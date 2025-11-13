@@ -1,5 +1,5 @@
 $body = @{
-    phone = "+353899548661"
+    phone = "+1234567890"
     message = "Hello from Baileys! Testing HBDrop 🎉🚀"
 } | ConvertTo-Json
 
