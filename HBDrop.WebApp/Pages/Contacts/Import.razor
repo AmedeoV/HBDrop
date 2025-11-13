@@ -526,20 +526,17 @@
                             Name = currentName,
                             PhoneNumber = currentPhone ?? "",
                             BirthdayDate = currentBirthday,
-                            IsSelected = false, // Don't auto-select, let user choose
+                            IsSelected = true, // Auto-select by default
                             IsValid = true
                         };
 
-                        // Mark as invalid only if missing phone number
-                        if (string.IsNullOrWhiteSpace(contact.PhoneNumber))
+                        // Contacts without phone numbers are still valid - user can add phone later
+                        // Only mark as invalid if missing name
+                        if (string.IsNullOrWhiteSpace(contact.Name))
                         {
                             contact.IsValid = false;
-                            contact.ValidationError = "Missing phone number";
+                            contact.ValidationError = "Missing name";
                             contact.IsSelected = false;
-                        }
-                        else
-                        {
-                            contact.IsSelected = true; // Auto-select valid contacts
                         }
 
                         parsedContacts.Add(contact);
@@ -630,7 +627,7 @@
                     {
                         UserId = userId!,
                         Name = parsedContact.Name.Trim(),
-                        PhoneNumber = parsedContact.PhoneNumber.Trim(),
+                        PhoneNumber = string.IsNullOrWhiteSpace(parsedContact.PhoneNumber) ? null : parsedContact.PhoneNumber.Trim(),
                         TimeZoneId = string.IsNullOrWhiteSpace(timezoneToUse) ? null : timezoneToUse,
                         PreferredMessageHour = hourToUse,
                         CreatedAt = DateTime.UtcNow

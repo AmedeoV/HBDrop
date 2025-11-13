@@ -40,10 +40,10 @@ public class Contact
     /// <summary>
     /// WhatsApp phone number in international format (e.g., +353899548661)
     /// or WhatsApp group ID (e.g., 123456789-123456789@g.us)
+    /// Optional - can be added later
     /// </summary>
-    [Required]
     [MaxLength(100)]
-    public string PhoneNumber { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
 
     /// <summary>
     /// Indicates if this contact is a WhatsApp group
