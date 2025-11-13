@@ -51,6 +51,12 @@ public class CustomEvent
     public int? EventYear { get; set; }
 
     /// <summary>
+    /// Additional notes about this event (used for AI message generation)
+    /// </summary>
+    [MaxLength(1000)]
+    public string? Notes { get; set; }
+
+    /// <summary>
     /// Custom message template for this event
     /// </summary>
     [MaxLength(1000)]

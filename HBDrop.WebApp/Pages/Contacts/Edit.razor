@@ -373,6 +373,13 @@
                                         </div>
 
                                         <div class="mb-3">
+                                            <label class="form-label fw-bold">Notes <small class="text-muted">(optional)</small></label>
+                                            <textarea class="form-control" @bind="additionalBirthday.Notes" rows="3"
+                                                      placeholder="e.g., Loves soccer, favorite color is blue, interested in dinosaurs..."></textarea>
+                                            <div class="form-text">Additional information about this person. Used by AI to generate personalized messages.</div>
+                                        </div>
+
+                                        <div class="mb-3">
                                             <label class="form-label fw-bold">Custom Birthday Message <small class="text-muted">(optional)</small></label>
                                             <textarea class="form-control" @bind="additionalBirthday.CustomMessage" rows="2"
                                                       placeholder="e.g., 🎉 Happy Birthday {Name}! Wishing you an amazing day!"></textarea>
@@ -668,6 +675,13 @@
                                         }
 
                                         <div class="mb-3">
+                                            <label class="form-label fw-bold">Notes <small class="text-muted">(optional)</small></label>
+                                            <textarea class="form-control" @bind="customEvent.Notes" rows="3"
+                                                      placeholder="e.g., Special occasion details, memories, preferences..."></textarea>
+                                            <div class="form-text">Additional information about this event. Used by AI to generate personalized messages.</div>
+                                        </div>
+
+                                        <div class="mb-3">
                                             <label class="form-label fw-bold">Custom Event Message <small class="text-muted">(optional)</small></label>
                                             <textarea class="form-control" @bind="customEvent.CustomMessage" rows="2"
                                                       placeholder="e.g., 🎉 Happy Father's Day! Thanks for everything you do!"></textarea>
@@ -936,6 +950,7 @@
         public int BirthMonth { get; set; }
         public int BirthDay { get; set; }
         public int? BirthYear { get; set; }
+        public string? Notes { get; set; }
         public string? CustomMessage { get; set; }
         public string? GifUrl { get; set; }
         public string SendTo { get; set; } = "Contact";
@@ -961,6 +976,7 @@
         public int EventMonth { get; set; }
         public int EventDay { get; set; }
         public int? EventYear { get; set; }
+        public string? Notes { get; set; }
         public string? CustomMessage { get; set; }
         public string? GifUrl { get; set; }
         public string SendTo { get; set; } = "Contact";
@@ -1106,6 +1122,7 @@
                     BirthMonth = ab.BirthMonth,
                     BirthDay = ab.BirthDay,
                     BirthYear = ab.BirthYear,
+                    Notes = ab.Notes,
                     CustomMessage = ab.CustomMessage,
                     GifUrl = ab.GifUrl,
                     SendTo = ab.SendTo,
@@ -1128,6 +1145,7 @@
                     EventMonth = ce.EventMonth,
                     EventDay = ce.EventDay,
                     EventYear = ce.EventYear,
+                    Notes = ce.Notes,
                     CustomMessage = ce.CustomMessage,
                     GifUrl = ce.GifUrl,
                     SendTo = ce.GroupId.HasValue ? "Group" : "Contact",
@@ -1405,6 +1423,9 @@
                             existingBirthday.BirthMonth = additionalBirthday.BirthMonth;
                             existingBirthday.BirthDay = additionalBirthday.BirthDay;
                             existingBirthday.BirthYear = additionalBirthday.BirthYear;
+                            existingBirthday.Notes = string.IsNullOrWhiteSpace(additionalBirthday.Notes) 
+                                ? null 
+                                : additionalBirthday.Notes.Trim();
                             existingBirthday.CustomMessage = string.IsNullOrWhiteSpace(additionalBirthday.CustomMessage) 
                                 ? null 
                                 : additionalBirthday.CustomMessage.Trim();
@@ -1432,6 +1453,9 @@
                             BirthMonth = additionalBirthday.BirthMonth,
                             BirthDay = additionalBirthday.BirthDay,
                             BirthYear = additionalBirthday.BirthYear,
+                            Notes = string.IsNullOrWhiteSpace(additionalBirthday.Notes) 
+                                ? null 
+                                : additionalBirthday.Notes.Trim(),
                             CustomMessage = string.IsNullOrWhiteSpace(additionalBirthday.CustomMessage) 
                                 ? null 
                                 : additionalBirthday.CustomMessage.Trim(),
@@ -1517,6 +1541,9 @@
                             existingEvent.EventMonth = customEvent.EventMonth;
                             existingEvent.EventDay = customEvent.EventDay;
                             existingEvent.EventYear = customEvent.EventYear;
+                            existingEvent.Notes = string.IsNullOrWhiteSpace(customEvent.Notes) 
+                                ? null 
+                                : customEvent.Notes.Trim();
                             existingEvent.CustomMessage = string.IsNullOrWhiteSpace(customEvent.CustomMessage) 
                                 ? null 
                                 : customEvent.CustomMessage.Trim();
@@ -1543,6 +1570,9 @@
                             EventMonth = customEvent.EventMonth,
                             EventDay = customEvent.EventDay,
                             EventYear = customEvent.EventYear,
+                            Notes = string.IsNullOrWhiteSpace(customEvent.Notes) 
+                                ? null 
+                                : customEvent.Notes.Trim(),
                             CustomMessage = string.IsNullOrWhiteSpace(customEvent.CustomMessage) 
                                 ? null 
                                 : customEvent.CustomMessage.Trim(),
@@ -1640,8 +1670,10 @@
 
             var eventContext = $"birthday of {contactModel.Name}'s {relationship} named {additionalBirthday.Name}";
 
-            // Get notes from contact if available
-            var notes = contact?.Notes;
+            // Get notes from the additional birthday itself, or fall back to contact notes
+            var notes = !string.IsNullOrWhiteSpace(additionalBirthday.Notes) 
+                ? additionalBirthday.Notes 
+                : contact?.Notes;
 
             // Generate message
             var generatedMessage = await AIMessageService.GenerateMessageAsync(
@@ -1679,8 +1711,10 @@
             // Determine event type from event name
             var eventType = customEvent.EventName.ToLower();
 
-            // Get notes from contact if available
-            var notes = contact?.Notes;
+            // Get notes from the custom event itself, or fall back to contact notes
+            var notes = !string.IsNullOrWhiteSpace(customEvent.Notes) 
+                ? customEvent.Notes 
+                : contact?.Notes;
 
             // Generate message
             var generatedMessage = await AIMessageService.GenerateMessageAsync(

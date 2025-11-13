@@ -308,6 +308,13 @@
                                     </div>
 
                                     <div class="mb-3">
+                                        <label class="form-label fw-bold">Notes <small class="text-muted">(optional)</small></label>
+                                        <textarea class="form-control" @bind="additionalBirthday.Notes" rows="3"
+                                                  placeholder="e.g., Loves soccer, favorite color is blue, interested in dinosaurs..."></textarea>
+                                        <div class="form-text">Additional information about this person. Used by AI to generate personalized messages.</div>
+                                    </div>
+
+                                    <div class="mb-3">
                                         <label class="form-label fw-bold">Custom Birthday Message <small class="text-muted">(optional)</small></label>
                                         <textarea class="form-control" @bind="additionalBirthday.CustomMessage" rows="2"
                                                   placeholder="e.g., 🎉 Happy Birthday {Name}! Wishing you an amazing day!"></textarea>
@@ -605,6 +612,13 @@
                                         </div>
                                     </div>
                                     }
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Notes <small class="text-muted">(optional)</small></label>
+                                        <textarea class="form-control" @bind="customEvent.Notes" rows="3"
+                                                  placeholder="e.g., Special occasion details, memories, preferences..."></textarea>
+                                        <div class="form-text">Additional information about this event. Used by AI to generate personalized messages.</div>
+                                    </div>
 
                                     <div class="mb-3">
                                         <label class="form-label fw-bold">Custom Message <small class="text-muted">(optional)</small></label>
@@ -916,6 +930,7 @@
         public int BirthMonth { get; set; }
         public int BirthDay { get; set; }
         public int? BirthYear { get; set; }
+        public string? Notes { get; set; }
         public string? CustomMessage { get; set; }
         public string? GifUrl { get; set; }
         public string SendTo { get; set; } = "Contact";
@@ -938,6 +953,7 @@
         public int EventMonth { get; set; }
         public int EventDay { get; set; }
         public int? EventYear { get; set; }
+        public string? Notes { get; set; }
         public string? CustomMessage { get; set; }
         public string? GifUrl { get; set; }
         public string SendTo { get; set; } = "Contact";
@@ -1297,11 +1313,11 @@
 
             var eventContext = $"birthday of {contactModel.Name}'s {relationship} named {additionalBirthday.Name}";
 
-            // Generate message
+            // Generate message using notes from the additional birthday
             var generatedMessage = await AIMessageService.GenerateMessageAsync(
                 additionalBirthday.Name,
                 eventContext,
-                null); // No notes available during add
+                additionalBirthday.Notes);
 
             additionalBirthday.CustomMessage = generatedMessage;
         }
@@ -1333,11 +1349,11 @@
             // Determine event type from event name
             var eventType = customEvent.EventName.ToLower();
 
-            // Generate message
+            // Generate message using notes from the custom event
             var generatedMessage = await AIMessageService.GenerateMessageAsync(
                 displayName,
                 eventType,
-                null); // No notes available during add
+                customEvent.Notes);
 
             customEvent.CustomMessage = generatedMessage;
         }

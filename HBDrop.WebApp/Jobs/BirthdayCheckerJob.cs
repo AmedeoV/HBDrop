@@ -476,7 +476,13 @@ public class BirthdayCheckerJob
             );
 
             var contextNotes = $"{birthdayPersonName} is the {relationship} of {parentContact.Name}";
-            if (!string.IsNullOrWhiteSpace(parentContact.Notes))
+            
+            // Use notes from the additional birthday if available, otherwise fall back to parent contact notes
+            if (!string.IsNullOrWhiteSpace(additionalBirthday.Notes))
+            {
+                contextNotes += $". {additionalBirthday.Notes}";
+            }
+            else if (!string.IsNullOrWhiteSpace(parentContact.Notes))
             {
                 contextNotes += $". Context: {parentContact.Notes}";
             }
@@ -550,7 +556,11 @@ public class BirthdayCheckerJob
 
             // Determine event type context for better AI messages
             var eventType = DetermineEventType(eventName);
-            var contextNotes = contact.Notes;
+            
+            // Use notes from the custom event if available, otherwise fall back to contact notes
+            var contextNotes = !string.IsNullOrWhiteSpace(customEvent.Notes) 
+                ? customEvent.Notes 
+                : contact.Notes;
 
             var aiMessage = await aiService.GenerateMessageAsync(
                 displayName,

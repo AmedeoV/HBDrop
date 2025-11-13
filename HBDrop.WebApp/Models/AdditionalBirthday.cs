@@ -57,6 +57,12 @@ public class AdditionalBirthday
     public string? Relationship { get; set; }
 
     /// <summary>
+    /// Additional notes about this person (used for AI message generation)
+    /// </summary>
+    [MaxLength(1000)]
+    public string? Notes { get; set; }
+
+    /// <summary>
     /// Custom birthday message template (optional)
     /// Uses {Name} as placeholder for the birthday person's name
     /// </summary>
