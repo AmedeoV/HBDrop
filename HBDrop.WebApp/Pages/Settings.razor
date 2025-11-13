@@ -311,22 +311,15 @@
                     bool needsUpdate = false;
                     bool isUsingDefaults = string.IsNullOrWhiteSpace(contact.TimeZoneId) || contact.TimeZoneId == oldTimeZoneId;
 
-                    // If contact is using default timezone, update both timezone and message hour
+                    // If contact is using default timezone, update both timezone and message hour to new defaults
                     if (isUsingDefaults)
                     {
-                        // Update timezone
-                        if (currentUser.DefaultTimeZoneId != settingsModel.TimeZoneId)
-                        {
-                            contact.TimeZoneId = settingsModel.TimeZoneId;
-                            needsUpdate = true;
-                        }
+                        // Update timezone to new default
+                        contact.TimeZoneId = settingsModel.TimeZoneId;
+                        needsUpdate = true;
 
-                        // Update message hour (regardless of what it currently is, since timezone change affects all defaults)
-                        if (currentUser.DefaultMessageHour != settingsModel.MessageHour)
-                        {
-                            contact.PreferredMessageHour = settingsModel.MessageHour;
-                            needsUpdate = true;
-                        }
+                        // Update message hour to new default
+                        contact.PreferredMessageHour = settingsModel.MessageHour;
                     }
 
                     if (needsUpdate)
