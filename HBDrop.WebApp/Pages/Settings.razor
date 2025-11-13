@@ -1,11 +1,15 @@
 @page "/settings"
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @using HBDrop.WebApp.Models
+@using HBDrop.WebApp.Data
 @* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
 @layout DashboardLayout
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager Navigation
+@inject ApplicationDbContext DbContext
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Settings - HBDrop</PageTitle>
 
@@ -114,6 +118,47 @@
     </div>
 </div>
 
+<!-- Modal for asking to update existing contacts -->
+@if (showUpdateContactsModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">📋 Update Existing Contacts?</h5>
+                    <button type="button" class="btn-close" @onclick="() => HandleUpdateContactsChoice(false)"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You've changed your default timezone or send time settings.</p>
+                    <p class="fw-bold">Would you like to update your existing @contactCount contact(s) with these new settings?</p>
+                    <div class="alert alert-info mb-0">
+                        <small>
+                            <strong>Note:</strong> This will only update contacts that don't have custom timezone or send time settings.
+                            Contacts with custom settings will keep their individual preferences.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => HandleUpdateContactsChoice(false)">
+                        No, Keep Current Settings
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="() => HandleUpdateContactsChoice(true)" disabled="@isUpdatingContacts">
+                        @if (isUpdatingContacts)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Updating...</span>
+                        }
+                        else
+                        {
+                            <span>Yes, Update Contacts</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private class SettingsModel
     {
@@ -132,6 +177,11 @@
     private bool isSaving = false;
     private string successMessage = "";
     private string errorMessage = "";
+    private bool showUpdateContactsModal = false;
+    private bool isUpdatingContacts = false;
+    private int contactCount = 0;
+    private string? oldTimeZoneId;
+    private int oldMessageHour;
 
     private List<TimeZoneOption> commonTimeZones = new()
     {
@@ -177,9 +227,16 @@
         currentUser = await UserManager.GetUserAsync(user);
         if (currentUser != null)
         {
-            // Load current settings
+            // Load current settings and store old values
+            oldTimeZoneId = currentUser.DefaultTimeZoneId;
+            oldMessageHour = currentUser.DefaultMessageHour;
             settingsModel.TimeZoneId = currentUser.DefaultTimeZoneId;
             settingsModel.MessageHour = currentUser.DefaultMessageHour;
+            
+            // Count contacts to show in modal
+            contactCount = await DbContext.Contacts
+                .Where(c => c.UserId == currentUser.Id)
+                .CountAsync();
         }
     }
 
@@ -193,6 +250,10 @@
 
         try
         {
+            // Check if timezone or message hour changed
+            bool settingsChanged = currentUser.DefaultTimeZoneId != settingsModel.TimeZoneId ||
+                                   currentUser.DefaultMessageHour != settingsModel.MessageHour;
+
             currentUser.DefaultTimeZoneId = settingsModel.TimeZoneId;
             currentUser.DefaultMessageHour = settingsModel.MessageHour;
 
@@ -200,7 +261,15 @@
 
             if (result.Succeeded)
             {
-                successMessage = "Your settings have been saved successfully!";
+                // If settings changed and user has contacts, ask if they want to update them
+                if (settingsChanged && contactCount > 0)
+                {
+                    showUpdateContactsModal = true;
+                }
+                else
+                {
+                    successMessage = "Your settings have been saved successfully!";
+                }
             }
             else
             {
@@ -214,6 +283,71 @@
         finally
         {
             isSaving = false;
+        }
+    }
+
+    private async Task HandleUpdateContactsChoice(bool updateContacts)
+    {
+        showUpdateContactsModal = false;
+
+        if (updateContacts && currentUser != null)
+        {
+            isUpdatingContacts = true;
+            try
+            {
+                // Update contacts that don't have custom settings
+                // A contact uses default settings if TimeZoneId is null or empty and PreferredMessageHour is -1 or matches old default
+                var contactsToUpdate = await DbContext.Contacts
+                    .Where(c => c.UserId == currentUser.Id)
+                    .ToListAsync();
+
+                int updatedCount = 0;
+                foreach (var contact in contactsToUpdate)
+                {
+                    bool needsUpdate = false;
+
+                    // Update timezone if contact is using default (null or empty) or old default
+                    if (string.IsNullOrWhiteSpace(contact.TimeZoneId) || contact.TimeZoneId == oldTimeZoneId)
+                    {
+                        contact.TimeZoneId = settingsModel.TimeZoneId;
+                        needsUpdate = true;
+                    }
+
+                    // Update message hour if contact is using default or old default
+                    if (contact.PreferredMessageHour == oldMessageHour)
+                    {
+                        contact.PreferredMessageHour = settingsModel.MessageHour;
+                        needsUpdate = true;
+                    }
+
+                    if (needsUpdate)
+                    {
+                        updatedCount++;
+                    }
+                }
+
+                if (updatedCount > 0)
+                {
+                    await DbContext.SaveChangesAsync();
+                    successMessage = $"Your settings have been saved and {updatedCount} contact(s) have been updated!";
+                }
+                else
+                {
+                    successMessage = "Your settings have been saved! (No contacts needed updating)";
+                }
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Settings saved, but failed to update contacts: {ex.Message}";
+            }
+            finally
+            {
+                isUpdatingContacts = false;
+            }
+        }
+        else
+        {
+            successMessage = "Your settings have been saved successfully!";
         }
     }
 
