@@ -3,6 +3,7 @@
 @using Microsoft.EntityFrameworkCore
 @using HBDrop.WebApp.Models
 @using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
 @* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
 @layout DashboardLayout
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -10,6 +11,7 @@
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@inject IWhatsAppService WhatsAppService
 
 <PageTitle>Contacts - HBDrop</PageTitle>
 
@@ -33,13 +35,38 @@
                     <a href="/contacts/import-calendar" class="btn btn-info">
                         <i class="bi bi-calendar-check"></i> Import Calendar
                     </a>
-                    <a href="/groups" class="btn btn-outline-primary">
-                        <i class="bi bi-people-fill"></i> Manage Groups
-                    </a>
+                    <button class="btn btn-outline-primary" @onclick="FetchGroups" disabled="@isFetchingGroups">
+                        @if (isFetchingGroups)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Fetching...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-people-fill"></i>
+                            <span>Fetch Groups</span>
+                        }
+                    </button>
                 </div>
             </div>
         </div>
     </div>
+
+    @if (!string.IsNullOrEmpty(fetchGroupsSuccessMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <strong>✓</strong> @fetchGroupsSuccessMessage
+            <button type="button" class="btn-close" @onclick="() => fetchGroupsSuccessMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(fetchGroupsErrorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Error:</strong> @fetchGroupsErrorMessage
+            <button type="button" class="btn-close" @onclick="() => fetchGroupsErrorMessage = null"></button>
+        </div>
+    }
 
     @if (isLoading)
     {
@@ -507,6 +534,9 @@
     private string searchQuery = "";
     private string groupSearchQuery = "";
     private bool showImportTip = true;
+    private bool isFetchingGroups = false;
+    private string? fetchGroupsSuccessMessage = null;
+    private string? fetchGroupsErrorMessage = null;
     
     // Sorting for individual contacts
     private string sortColumn = "Name";
@@ -552,6 +582,69 @@
         // Initialize filtered lists
         FilterContacts();
         FilterGroups();
+    }
+
+    private async Task FetchGroups()
+    {
+        isFetchingGroups = true;
+        fetchGroupsSuccessMessage = null;
+        fetchGroupsErrorMessage = null;
+
+        try
+        {
+            var whatsappGroups = await WhatsAppService.GetGroupsAsync();
+            
+            // Get existing group contacts from database
+            var existingGroupIds = await DbContext.Contacts
+                .Where(c => c.UserId == userId && c.IsGroup)
+                .Select(c => c.GroupId)
+                .ToListAsync();
+            
+            // Find new groups that don't exist in contacts yet
+            var newGroups = whatsappGroups
+                .Where(g => !existingGroupIds.Contains(g.Id))
+                .ToList();
+
+            if (newGroups.Any())
+            {
+                foreach (var group in newGroups)
+                {
+                    var contact = new Contact
+                    {
+                        UserId = userId,
+                        Name = group.Name,
+                        PhoneNumber = group.Id, // Store group ID as phone number
+                        IsGroup = true,
+                        GroupId = group.Id,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    DbContext.Contacts.Add(contact);
+                }
+
+                await DbContext.SaveChangesAsync();
+                
+                fetchGroupsSuccessMessage = $"✓ Successfully fetched and added {newGroups.Count} new group(s) to your contacts!";
+                
+                // Reload contacts to show the new groups
+                await LoadContacts();
+                
+                // Switch to groups tab to show the newly added groups
+                activeTab = "groups";
+            }
+            else
+            {
+                fetchGroupsSuccessMessage = "All WhatsApp groups are already in your contacts.";
+            }
+        }
+        catch (Exception ex)
+        {
+            fetchGroupsErrorMessage = $"Failed to fetch groups: {ex.Message}";
+        }
+        finally
+        {
+            isFetchingGroups = false;
+        }
     }
 
     private string? GetSendToGroupName(string? sendToGroupId)
