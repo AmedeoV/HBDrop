@@ -453,9 +453,17 @@
             string? currentName = null;
             string? currentPhone = null;
             DateTime? currentBirthday = null;
+            int lineCount = 0;
             
             foreach (var line in lines)
             {
+                lineCount++;
+                // Yield control every 100 lines to prevent circuit timeout
+                if (lineCount % 100 == 0)
+                {
+                    await Task.Yield();
+                }
+                
                 var trimmedLine = line.Trim();
                 
                 if (trimmedLine.StartsWith("BEGIN:VCARD"))
@@ -550,6 +558,7 @@
             }
             
             // After parsing, check for duplicates in batch
+            // Check by phone number (for contacts with phones)
             var phoneNumbers = parsedContacts
                 .Where(c => !string.IsNullOrWhiteSpace(c.PhoneNumber))
                 .Select(c => c.PhoneNumber)
@@ -560,12 +569,34 @@
                 .Select(c => c.PhoneNumber)
                 .ToListAsync();
             
+            // Also check by name (for contacts without phones)
+            var names = parsedContacts
+                .Select(c => c.Name)
+                .ToList();
+            
+            var existingNames = await DbContext.Contacts
+                .Where(c => c.UserId == userId && names.Contains(c.Name))
+                .Select(c => new { c.Name, c.PhoneNumber })
+                .ToListAsync();
+            
             foreach (var contact in parsedContacts)
             {
-                if (existingPhones.Contains(contact.PhoneNumber))
+                // Check if phone number exists
+                if (!string.IsNullOrWhiteSpace(contact.PhoneNumber) && existingPhones.Contains(contact.PhoneNumber))
                 {
                     contact.IsDuplicate = true;
                     contact.IsSelected = false;
+                }
+                // Or if name exists and both don't have phone numbers
+                else if (string.IsNullOrWhiteSpace(contact.PhoneNumber))
+                {
+                    var nameMatch = existingNames.FirstOrDefault(e => 
+                        e.Name == contact.Name && string.IsNullOrWhiteSpace(e.PhoneNumber));
+                    if (nameMatch != null)
+                    {
+                        contact.IsDuplicate = true;
+                        contact.IsSelected = false;
+                    }
                 }
             }
             
