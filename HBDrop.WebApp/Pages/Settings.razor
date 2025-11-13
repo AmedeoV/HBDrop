@@ -309,19 +309,24 @@
                 foreach (var contact in contactsToUpdate)
                 {
                     bool needsUpdate = false;
+                    bool isUsingDefaults = string.IsNullOrWhiteSpace(contact.TimeZoneId) || contact.TimeZoneId == oldTimeZoneId;
 
-                    // Update timezone if contact is using default (null or empty) or old default
-                    if (string.IsNullOrWhiteSpace(contact.TimeZoneId) || contact.TimeZoneId == oldTimeZoneId)
+                    // If contact is using default timezone, update both timezone and message hour
+                    if (isUsingDefaults)
                     {
-                        contact.TimeZoneId = settingsModel.TimeZoneId;
-                        needsUpdate = true;
-                    }
+                        // Update timezone
+                        if (currentUser.DefaultTimeZoneId != settingsModel.TimeZoneId)
+                        {
+                            contact.TimeZoneId = settingsModel.TimeZoneId;
+                            needsUpdate = true;
+                        }
 
-                    // Update message hour if contact is using default or old default
-                    if (contact.PreferredMessageHour == oldMessageHour)
-                    {
-                        contact.PreferredMessageHour = settingsModel.MessageHour;
-                        needsUpdate = true;
+                        // Update message hour (regardless of what it currently is, since timezone change affects all defaults)
+                        if (currentUser.DefaultMessageHour != settingsModel.MessageHour)
+                        {
+                            contact.PreferredMessageHour = settingsModel.MessageHour;
+                            needsUpdate = true;
+                        }
                     }
 
                     if (needsUpdate)
