@@ -663,7 +663,8 @@
         {
             filteredIndividualContacts = individualContacts
                 .Where(c => c.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
-                           c.PhoneNumber.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                           (c.PhoneNumber != null && c.PhoneNumber.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)) ||
+                           (c.Email != null && c.Email.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
         }
         
