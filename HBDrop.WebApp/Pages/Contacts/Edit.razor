@@ -90,214 +90,237 @@
                                 <ValidationMessage For="@(() => contactModel.Email)" />
                             </div>
 
-                            <!-- Birthday Information -->
-                            <h5 class="mb-3">🎂 Birthday Information</h5>
-
-                            <div class="row mb-3">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">Month <span class="text-danger">*</span></label>
-                                    <InputSelect class="form-select" @bind-Value="contactModel.BirthMonth">
-                                        <option value="0">Select month...</option>
-                                        <option value="1">January</option>
-                                        <option value="2">February</option>
-                                        <option value="3">March</option>
-                                        <option value="4">April</option>
-                                        <option value="5">May</option>
-                                        <option value="6">June</option>
-                                        <option value="7">July</option>
-                                        <option value="8">August</option>
-                                        <option value="9">September</option>
-                                        <option value="10">October</option>
-                                        <option value="11">November</option>
-                                        <option value="12">December</option>
-                                    </InputSelect>
-                                    <ValidationMessage For="@(() => contactModel.BirthMonth)" />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">Day <span class="text-danger">*</span></label>
-                                    <InputNumber class="form-control" @bind-Value="contactModel.BirthDay" min="1" max="31" placeholder="1-31" />
-                                    <ValidationMessage For="@(() => contactModel.BirthDay)" />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">Year <small class="text-muted">(optional)</small></label>
-                                    <InputNumber class="form-control" @bind-Value="contactModel.BirthYear" min="1900" max="@DateTime.Now.Year" placeholder="YYYY" />
-                                    <div class="form-text">
-                                        <small>Optional - helps calculate age</small>
-                                    </div>
-                                    <ValidationMessage For="@(() => contactModel.BirthYear)" />
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <label class="form-label fw-bold">Enable Birthday Reminders</label>
-                                <div class="form-check form-switch">
-                                    <InputCheckbox class="form-check-input" @bind-Value="contactModel.IsEnabled" id="enableSwitch" />
-                                    <label class="form-check-label" for="enableSwitch">
-                                        @if (contactModel.IsEnabled)
-                                        {
-                                            <span class="text-success">✓ Enabled - Birthday messages will be sent automatically</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">✗ Disabled - No birthday messages will be sent</span>
-                                        }
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Message Settings -->
-                            <h5 class="mb-3">📝 Message Settings</h5>
-
-                            <div class="mb-3">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <label class="form-label fw-bold mb-0">Custom Birthday Message <small class="text-muted">(optional)</small></label>
-                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="GenerateAIMessage" disabled="@isGeneratingMessage">
-                                        @if (isGeneratingMessage)
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                            <span>Generating...</span>
-                                        }
-                                        else
-                                        {
-                                            <i class="bi bi-stars"></i>
-                                            <span>Generate with AI</span>
-                                        }
-                                    </button>
-                                </div>
-                                <InputTextArea class="form-control" @bind-Value="contactModel.CustomMessage" rows="3" 
-                                               placeholder="Leave empty to use your default message. You can use {name} as a placeholder." />
-                                <div class="form-text">
-                                    <i class="bi bi-info-circle"></i> Use <code>{name}</code> to insert the contact's name
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Birthday GIF <small class="text-muted">(optional)</small></label>
-                                <div class="form-text mb-2">
-                                    <i class="bi bi-image"></i> Search and select a GIF to send with the birthday message
-                                </div>
-                                <GifSearchComponent @bind-SelectedGifUrl="contactModel.GifUrl" />
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Send Birthday Message To <small class="text-muted">(optional)</small></label>
-                                
-                                @if (!showGroupSearch)
-                                {
-                                    <div class="d-flex gap-2 align-items-center">
-                                        @if (selectedGroup == null)
-                                        {
-                                            <div class="alert alert-info mb-0 flex-grow-1">
-                                                📱 <strong>Send directly to this person</strong>
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <div class="alert alert-success mb-0 flex-grow-1 d-flex justify-content-between align-items-center">
-                                                <span>📢 <strong>@selectedGroup.Name</strong></span>
-                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => SelectGroup(null)">
-                                                    <i class="bi bi-x"></i> Remove
-                                                </button>
-                                            </div>
-                                        }
-                                        <button type="button" class="btn btn-primary" @onclick="() => showGroupSearch = true">
-                                            <i class="bi bi-search"></i> @(selectedGroup == null ? "Select Group" : "Change Group")
+                            <!-- Birthday Information - Collapsible Section -->
+                            <div class="accordion mb-4" id="mainBirthdayAccordion">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="mainBirthdayHeading">
+                                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#mainBirthdayCollapse" aria-expanded="true" aria-controls="mainBirthdayCollapse">
+                                            <strong>🎂 Birthday Information & Message Settings</strong>
                                         </button>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="input-group mb-3">
-                                                <input type="text" 
-                                                       class="form-control" 
-                                                       placeholder="Search for a group..." 
-                                                       @bind="groupSearchQuery"
-                                                       @bind:event="oninput"
-                                                       @onkeyup="FilterGroups" />
-                                                <button type="button" class="btn btn-outline-secondary" @onclick="ClearGroupSearch">
-                                                    <i class="bi bi-x"></i> Cancel
-                                                </button>
-                                            </div>
+                                    </h2>
+                                    <div id="mainBirthdayCollapse" class="accordion-collapse collapse show" aria-labelledby="mainBirthdayHeading">
+                                        <div class="accordion-body">
+                                            <h6 class="mb-3 text-primary">📅 Birthday Details</h6>
                                             
-                                            <div class="list-group" style="max-height: 300px; overflow-y: auto;">
-                                                <button type="button" 
-                                                        class="list-group-item list-group-item-action @(string.IsNullOrEmpty(contactModel.SendToGroupId) ? "active" : "")"
-                                                        @onclick="() => SelectGroup(null)">
-                                                    📱 Send directly to this person
-                                                </button>
+                                            <div class="row mb-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold">Month <span class="text-danger">*</span></label>
+                                                    <InputSelect class="form-select" @bind-Value="contactModel.BirthMonth">
+                                                        <option value="0">Select month...</option>
+                                                        <option value="1">January</option>
+                                                        <option value="2">February</option>
+                                                        <option value="3">March</option>
+                                                        <option value="4">April</option>
+                                                        <option value="5">May</option>
+                                                        <option value="6">June</option>
+                                                        <option value="7">July</option>
+                                                        <option value="8">August</option>
+                                                        <option value="9">September</option>
+                                                        <option value="10">October</option>
+                                                        <option value="11">November</option>
+                                                        <option value="12">December</option>
+                                                    </InputSelect>
+                                                    <ValidationMessage For="@(() => contactModel.BirthMonth)" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold">Day <span class="text-danger">*</span></label>
+                                                    <InputNumber class="form-control" @bind-Value="contactModel.BirthDay" min="1" max="31" placeholder="1-31" />
+                                                    <ValidationMessage For="@(() => contactModel.BirthDay)" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold">Year <small class="text-muted">(optional)</small></label>
+                                                    <InputNumber class="form-control" @bind-Value="contactModel.BirthYear" min="1900" max="@DateTime.Now.Year" placeholder="YYYY" />
+                                                    <div class="form-text">
+                                                        <small>Optional - helps calculate age</small>
+                                                    </div>
+                                                    <ValidationMessage For="@(() => contactModel.BirthYear)" />
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-4">
+                                                <label class="form-label fw-bold">Enable Birthday Reminders</label>
+                                                <div class="form-check form-switch">
+                                                    <InputCheckbox class="form-check-input" @bind-Value="contactModel.IsEnabled" id="enableSwitch" />
+                                                    <label class="form-check-label" for="enableSwitch">
+                                                        @if (contactModel.IsEnabled)
+                                                        {
+                                                            <span class="text-success">✓ Enabled - Birthday messages will be sent automatically</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">✗ Disabled - No birthday messages will be sent</span>
+                                                        }
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <hr class="my-4" />
+
+                                            <h6 class="mb-3 text-primary">📝 Message Settings</h6>
+
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <label class="form-label fw-bold mb-0">Custom Birthday Message <small class="text-muted">(optional)</small></label>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="GenerateAIMessage" disabled="@isGeneratingMessage">
+                                                        @if (isGeneratingMessage)
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                            <span>Generating...</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="bi bi-stars"></i>
+                                                            <span>Generate with AI</span>
+                                                        }
+                                                    </button>
+                                                </div>
+                                                <InputTextArea class="form-control" @bind-Value="contactModel.CustomMessage" rows="3" 
+                                                               placeholder="Leave empty to use your default message. You can use {name} as a placeholder." />
+                                                <div class="form-text">
+                                                    <i class="bi bi-info-circle"></i> Use <code>{name}</code> to insert the contact's name
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Birthday GIF <small class="text-muted">(optional)</small></label>
+                                                <div class="form-text mb-2">
+                                                    <i class="bi bi-image"></i> Search and select a GIF to send with the birthday message
+                                                </div>
+                                                <GifSearchComponent @bind-SelectedGifUrl="contactModel.GifUrl" />
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">Send Birthday Message To <small class="text-muted">(optional)</small></label>
                                                 
-                                                @if (filteredGroups.Any())
+                                                @if (!showGroupSearch)
                                                 {
-                                                    @foreach (var group in filteredGroups)
-                                                    {
-                                                        <button type="button" 
-                                                                class="list-group-item list-group-item-action @(contactModel.SendToGroupId == group.GroupId ? "active" : "")"
-                                                                @onclick="() => SelectGroup(group)">
-                                                            📢 @group.Name
+                                                    <div class="d-flex gap-2 align-items-center">
+                                                        @if (selectedGroup == null)
+                                                        {
+                                                            <div class="alert alert-info mb-0 flex-grow-1">
+                                                                📱 <strong>Send directly to this person</strong>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="alert alert-success mb-0 flex-grow-1 d-flex justify-content-between align-items-center">
+                                                                <span>📢 <strong>@selectedGroup.Name</strong></span>
+                                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => SelectGroup(null)">
+                                                                    <i class="bi bi-x"></i> Remove
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                        <button type="button" class="btn btn-primary" @onclick="() => showGroupSearch = true">
+                                                            <i class="bi bi-search"></i> @(selectedGroup == null ? "Select Group" : "Change Group")
                                                         </button>
-                                                    }
-                                                }
-                                                else if (!string.IsNullOrWhiteSpace(groupSearchQuery))
-                                                {
-                                                    <div class="list-group-item text-muted">
-                                                        No groups found matching "@groupSearchQuery"
                                                     </div>
                                                 }
-                                                else if (!availableGroups.Any())
+                                                else
                                                 {
-                                                    <div class="list-group-item text-muted">
-                                                        No WhatsApp groups available
+                                                    <div class="card">
+                                                        <div class="card-body">
+                                                            <div class="input-group mb-3">
+                                                                <input type="text" 
+                                                                       class="form-control" 
+                                                                       placeholder="Search for a group..." 
+                                                                       @bind="groupSearchQuery"
+                                                                       @bind:event="oninput"
+                                                                       @onkeyup="FilterGroups" />
+                                                                <button type="button" class="btn btn-outline-secondary" @onclick="ClearGroupSearch">
+                                                                    <i class="bi bi-x"></i> Cancel
+                                                                </button>
+                                                            </div>
+                                                            
+                                                            <div class="list-group" style="max-height: 300px; overflow-y: auto;">
+                                                                <button type="button" 
+                                                                        class="list-group-item list-group-item-action @(string.IsNullOrEmpty(contactModel.SendToGroupId) ? "active" : "")"
+                                                                        @onclick="() => SelectGroup(null)">
+                                                                    📱 Send directly to this person
+                                                                </button>
+                                                                
+                                                                @if (filteredGroups.Any())
+                                                                {
+                                                                    @foreach (var group in filteredGroups)
+                                                                    {
+                                                                        <button type="button" 
+                                                                                class="list-group-item list-group-item-action @(contactModel.SendToGroupId == group.GroupId ? "active" : "")"
+                                                                                @onclick="() => SelectGroup(group)">
+                                                                            📢 @group.Name
+                                                                        </button>
+                                                                    }
+                                                                }
+                                                                else if (!string.IsNullOrWhiteSpace(groupSearchQuery))
+                                                                {
+                                                                    <div class="list-group-item text-muted">
+                                                                        No groups found matching "@groupSearchQuery"
+                                                                    </div>
+                                                                }
+                                                                else if (!availableGroups.Any())
+                                                                {
+                                                                    <div class="list-group-item text-muted">
+                                                                        No WhatsApp groups available
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 }
+                                                
+                                                <div class="form-text">
+                                                    <i class="bi bi-info-circle"></i> Choose a WhatsApp group to post the birthday message to, or leave as default to send directly to the person.
+                                                </div>
+                                            </div>
+
+                                            <div class="row mb-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-bold">Timezone <small class="text-muted">(optional)</small></label>
+                                                    <InputSelect class="form-select" @bind-Value="contactModel.TimeZoneId">
+                                                        <option value="">Use my default (@userDefaultTimezone)</option>
+                                                        @foreach (var tz in commonTimeZones)
+                                                        {
+                                                            <option value="@tz.Id">@tz.DisplayName</option>
+                                                        }
+                                                    </InputSelect>
+                                                    <div class="form-text">
+                                                        <small>Only change if this person lives in a different timezone</small>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-bold">Send Time <small class="text-muted">(optional)</small></label>
+                                                    <InputSelect class="form-select" @bind-Value="contactModel.MessageHour">
+                                                        <option value="-1">Use my default (@FormatHour(userDefaultHour))</option>
+                                                        @for (int hour = 0; hour < 24; hour++)
+                                                        {
+                                                            <option value="@hour">@FormatHour(hour)</option>
+                                                        }
+                                                    </InputSelect>
+                                                    <div class="form-text">
+                                                        <small>Time to send the birthday message</small>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                }
-                                
-                                <div class="form-text">
-                                    <i class="bi bi-info-circle"></i> Choose a WhatsApp group to post the birthday message to, or leave as default to send directly to the person.
                                 </div>
                             </div>
 
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label fw-bold">Timezone <small class="text-muted">(optional)</small></label>
-                                    <InputSelect class="form-select" @bind-Value="contactModel.TimeZoneId">
-                                        <option value="">Use my default (@userDefaultTimezone)</option>
-                                        @foreach (var tz in commonTimeZones)
-                                        {
-                                            <option value="@tz.Id">@tz.DisplayName</option>
-                                        }
-                                    </InputSelect>
-                                    <div class="form-text">
-                                        <small>Only change if this person lives in a different timezone</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label fw-bold">Send Time <small class="text-muted">(optional)</small></label>
-                                    <InputSelect class="form-select" @bind-Value="contactModel.MessageHour">
-                                        <option value="-1">Use my default (@FormatHour(userDefaultHour))</option>
-                                        @for (int hour = 0; hour < 24; hour++)
-                                        {
-                                            <option value="@hour">@FormatHour(hour)</option>
-                                        }
-                                    </InputSelect>
-                                    <div class="form-text">
-                                        <small>Time to send the birthday message</small>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Additional Birthdays Section -->
-                            <h5 class="mb-3 mt-4">👨‍👩‍👧‍👦 Additional Birthdays (Kids, Family Members)</h5>
-                            <div class="alert alert-info mb-3">
-                                <small>
-                                    <strong>Tip:</strong> Add birthdays for family members (kids, spouse, etc.) who don't have their own phone. 
-                                    You can choose to send the message to this contact or to a WhatsApp group.
-                                </small>
-                            </div>
+                            <!-- Additional Birthdays Section - Collapsible -->
+                            <div class="accordion mb-4" id="additionalBirthdaysAccordion">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="additionalBirthdaysHeading">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#additionalBirthdaysCollapse" aria-expanded="false" aria-controls="additionalBirthdaysCollapse">
+                                            <strong>👨‍👩‍👧‍👦 Additional Birthdays (@additionalBirthdays.Count)</strong>
+                                            <span class="ms-2 text-muted small">Kids, Family Members</span>
+                                        </button>
+                                    </h2>
+                                    <div id="additionalBirthdaysCollapse" class="accordion-collapse collapse" aria-labelledby="additionalBirthdaysHeading">
+                                        <div class="accordion-body">
+                                            <div class="alert alert-info mb-3">
+                                                <small>
+                                                    <strong>Tip:</strong> Add birthdays for family members (kids, spouse, etc.) who don't have their own phone. 
+                                                    You can choose to send the message to this contact or to a WhatsApp group.
+                                                </small>
+                                            </div>
 
                             @foreach (var (additionalBirthday, index) in additionalBirthdays.Select((b, i) => (b, i)))
                             {
@@ -535,9 +558,22 @@
                             <button type="button" class="btn btn-outline-primary mb-4" @onclick="AddAdditionalBirthday">
                                 ➕ Add Another Birthday
                             </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                            <!-- Custom Events Section -->
-                            <h5 class="mb-3 mt-4">🎉 Custom Events (Father's Day, Mother's Day, Anniversaries)</h5>
+                            <!-- Custom Events Section - Collapsible -->
+                            <div class="accordion mb-4" id="customEventsAccordion">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="customEventsHeading">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#customEventsCollapse" aria-expanded="false" aria-controls="customEventsCollapse">
+                                            <strong>🎉 Custom Events (@customEvents.Count)</strong>
+                                            <span class="ms-2 text-muted small">Father's Day, Mother's Day, Anniversaries</span>
+                                        </button>
+                                    </h2>
+                                    <div id="customEventsCollapse" class="accordion-collapse collapse" aria-labelledby="customEventsHeading">
+                                        <div class="accordion-body">
                             <div class="alert alert-info mb-3">
                                 <small>
                                     <strong>Tip:</strong> Add special occasions like Father's Day, Mother's Day, Wedding Anniversary, etc.
@@ -849,6 +885,10 @@
                             <button type="button" class="btn btn-outline-success mb-4" @onclick="AddCustomEvent">
                                 ➕ Add Custom Event
                             </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                             <!-- Notes -->
                             <h5 class="mb-3">📝 Notes</h5>
