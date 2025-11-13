@@ -167,13 +167,14 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
-// Hangfire authorization filter - allow only authenticated users
+// Hangfire authorization filter - allow only Admin role
 public class HangfireAuthorizationFilter : IDashboardAuthorizationFilter
 {
     public bool Authorize(DashboardContext context)
     {
         var httpContext = context.GetHttpContext();
-        return httpContext.User.Identity?.IsAuthenticated ?? false;
+        return httpContext.User.Identity?.IsAuthenticated == true 
+            && httpContext.User.IsInRole("Admin");
     }
 }
 
