@@ -300,12 +300,11 @@
             try
             {
                 // Update contacts that don't have custom settings
-                // A contact uses default settings if TimeZoneId is null or empty and PreferredMessageHour is -1 or matches old default
                 var contactsToUpdate = await DbContext.Contacts
                     .Where(c => c.UserId == currentUser.Id)
                     .ToListAsync();
 
-                int updatedCount = 0;
+                int updatedContactsCount = 0;
                 foreach (var contact in contactsToUpdate)
                 {
                     bool needsUpdate = false;
@@ -324,23 +323,68 @@
 
                     if (needsUpdate)
                     {
-                        updatedCount++;
+                        updatedContactsCount++;
                     }
                 }
 
-                if (updatedCount > 0)
+                // Update Additional Birthdays that use default settings
+                var additionalBirthdays = await DbContext.AdditionalBirthdays
+                    .Include(ab => ab.Contact)
+                    .Where(ab => ab.Contact.UserId == currentUser.Id)
+                    .ToListAsync();
+
+                int updatedBirthdaysCount = 0;
+                foreach (var birthday in additionalBirthdays)
+                {
+                    bool isUsingDefaults = string.IsNullOrWhiteSpace(birthday.TimeZoneId) || birthday.TimeZoneId == oldTimeZoneId;
+                    
+                    if (isUsingDefaults)
+                    {
+                        birthday.TimeZoneId = settingsModel.TimeZoneId;
+                        birthday.MessageHour = settingsModel.MessageHour;
+                        updatedBirthdaysCount++;
+                    }
+                }
+
+                // Update Custom Events that use default settings
+                var customEvents = await DbContext.CustomEvents
+                    .Include(ce => ce.Contact)
+                    .Where(ce => ce.Contact.UserId == currentUser.Id)
+                    .ToListAsync();
+
+                int updatedEventsCount = 0;
+                foreach (var customEvent in customEvents)
+                {
+                    bool isUsingDefaults = string.IsNullOrWhiteSpace(customEvent.TimeZoneId) || customEvent.TimeZoneId == oldTimeZoneId;
+                    
+                    if (isUsingDefaults)
+                    {
+                        customEvent.TimeZoneId = settingsModel.TimeZoneId;
+                        customEvent.MessageHour = settingsModel.MessageHour;
+                        updatedEventsCount++;
+                    }
+                }
+
+                // Save all changes
+                if (updatedContactsCount > 0 || updatedBirthdaysCount > 0 || updatedEventsCount > 0)
                 {
                     await DbContext.SaveChangesAsync();
-                    successMessage = $"Your settings have been saved and {updatedCount} contact(s) have been updated!";
+                    
+                    var updates = new List<string>();
+                    if (updatedContactsCount > 0) updates.Add($"{updatedContactsCount} contact(s)");
+                    if (updatedBirthdaysCount > 0) updates.Add($"{updatedBirthdaysCount} additional birthday(s)");
+                    if (updatedEventsCount > 0) updates.Add($"{updatedEventsCount} custom event(s)");
+                    
+                    successMessage = $"Your settings have been saved and {string.Join(", ", updates)} have been updated!";
                 }
                 else
                 {
-                    successMessage = "Your settings have been saved! (No contacts needed updating)";
+                    successMessage = "Your settings have been saved! (No items needed updating)";
                 }
             }
             catch (Exception ex)
             {
-                errorMessage = $"Settings saved, but failed to update contacts: {ex.Message}";
+                errorMessage = $"Settings saved, but failed to update items: {ex.Message}";
             }
             finally
             {
