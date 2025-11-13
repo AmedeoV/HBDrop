@@ -267,12 +267,13 @@
             }
             else
             {
-                Console.WriteLine($"[Connect] Failed to get QR code - empty response");
-                errorMessage = "❌ Failed to generate QR code. Possible issues:\n" +
+                Console.WriteLine($"[Connect] Failed to get QR code after multiple retries - empty response");
+                errorMessage = "❌ Failed to generate QR code after multiple attempts.\n\n" +
+                              "Possible issues:\n" +
                               "• WhatsApp service might be down\n" +
                               "• Network connectivity issue\n" +
                               "• Previous session not fully cleaned up\n\n" +
-                              "Please wait a moment and try again.";
+                              "Please wait a moment and try again. The system automatically retries 3 times with delays.";
                 connectionStatus = ConnectionStatus.Error;
             }
         }

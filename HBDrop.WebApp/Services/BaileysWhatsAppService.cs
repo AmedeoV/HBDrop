@@ -110,27 +110,55 @@ public class BaileysWhatsAppService : IWhatsAppService
 
     public async Task<string?> GetQRCodeAsync(string userId)
     {
-        try
+        const int maxRetries = 3;
+        var delays = new[] { 1000, 2000, 3000 }; // milliseconds: 1s, 2s, 3s
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            _logger.LogInformation("Requesting QR code for user {UserId}", userId);
-            
-            var response = await _httpClient.GetAsync($"/qr/{userId}");
-            var result = await response.Content.ReadFromJsonAsync<QrResponse>();
-            
-            if (result?.Success ?? false)
+            try
             {
-                _logger.LogInformation("QR code generated successfully for user {UserId}", userId);
-                return result.QrCode;
-            }
+                _logger.LogInformation("Requesting QR code for user {UserId} (attempt {Attempt}/{MaxRetries})", 
+                    userId, attempt, maxRetries);
+                
+                var response = await _httpClient.GetAsync($"/qr/{userId}");
+                var result = await response.Content.ReadFromJsonAsync<QrResponse>();
+                
+                if (result?.Success ?? false)
+                {
+                    _logger.LogInformation("QR code generated successfully for user {UserId} on attempt {Attempt}", 
+                        userId, attempt);
+                    return result.QrCode;
+                }
 
-            _logger.LogWarning("Failed to generate QR code: {Message}", result?.Message);
-            return null;
+                _logger.LogWarning("Failed to generate QR code on attempt {Attempt}: {Message}", 
+                    attempt, result?.Message);
+                
+                // If not the last attempt, wait before retrying
+                if (attempt < maxRetries)
+                {
+                    var delay = delays[attempt - 1];
+                    _logger.LogInformation("Waiting {Delay}ms before retry...", delay);
+                    await Task.Delay(delay);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting QR code for user {UserId} on attempt {Attempt}", 
+                    userId, attempt);
+                
+                // If not the last attempt, wait before retrying
+                if (attempt < maxRetries)
+                {
+                    var delay = delays[attempt - 1];
+                    _logger.LogInformation("Waiting {Delay}ms before retry after exception...", delay);
+                    await Task.Delay(delay);
+                }
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting QR code for user {UserId}", userId);
-            return null;
-        }
+        
+        _logger.LogError("Failed to generate QR code for user {UserId} after {MaxRetries} attempts", 
+            userId, maxRetries);
+        return null;
     }
 
     public async Task<string?> GetPairingCodeAsync(string userId, string phoneNumber)
