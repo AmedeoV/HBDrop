@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,7 @@ using HBDrop.WebApp.Data;
 using HBDrop.WebApp.Models;
 using HBDrop.WebApp.Services;
 using HBDrop.WebApp.Jobs;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,19 +27,21 @@ builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingIdentityAuth
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
+// Configure Redis connection
+var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379";
+
 // Configure distributed cache for sessions (prevents logout on redeploy)
 builder.Services.AddStackExchangeRedisCache(options =>
 {
-    options.Configuration = builder.Configuration.GetConnectionString("Redis");
+    options.Configuration = redisConnection;
     options.InstanceName = "HBDrop_";
 });
 
 // Configure Data Protection to persist keys in Redis (prevents logout on redeploy)
+var redis = ConnectionMultiplexer.Connect(redisConnection);
 builder.Services.AddDataProtection()
     .SetApplicationName("HBDrop")
-    .PersistKeysToStackExchangeRedis(
-        StackExchange.Redis.ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis") ?? "redis:6379"),
-        "HBDrop-DataProtection-Keys");
+    .PersistKeysToStackExchangeRedis(redis, "HBDrop-DataProtection-Keys");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
