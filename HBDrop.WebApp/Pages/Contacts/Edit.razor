@@ -608,13 +608,6 @@
                                                     </div>
                                                 }
                                             }
-
-                                            <div class="mb-3">
-                                                <label class="form-label fw-bold">Event Name (Display) <span class="text-danger">*</span></label>
-                                                <input type="text" class="form-control" @bind="customEvent.EventName" 
-                                                       placeholder="e.g., Dad's Father's Day" />
-                                                <div class="form-text">Friendly name for this event</div>
-                                            </div>
                                         }
                                         else
                                         {
@@ -1178,6 +1171,9 @@
     {
         if (string.IsNullOrEmpty(customEvent.RegionalEventType) || regionalEventsService == null)
             return;
+
+        // Auto-set EventName from the selected regional event
+        customEvent.EventName = customEvent.RegionalEventType;
 
         var countries = regionalEventsService.GetCountriesForEvent(customEvent.RegionalEventType);
         
