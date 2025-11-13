@@ -34,6 +34,30 @@ public class BirthdayCheckerJob
             using var scope = _serviceScopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var whatsAppService = scope.ServiceProvider.GetRequiredService<IWhatsAppService>();
+            var aiService = scope.ServiceProvider.GetRequiredService<AIMessageService>();
+
+            // Check main birthdays
+            await CheckMainBirthdaysAsync(dbContext, whatsAppService, aiService);
+            
+            // Check additional birthdays
+            await CheckAdditionalBirthdaysAsync(dbContext, whatsAppService, aiService);
+            
+            // Check custom events
+            await CheckCustomEventsAsync(dbContext, whatsAppService, aiService);
+
+            _logger.LogInformation("Birthday check job completed at {Time}", DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Fatal error in birthday check job");
+        }
+    }
+
+    private async Task CheckMainBirthdaysAsync(
+        ApplicationDbContext dbContext,
+        IWhatsAppService whatsAppService,
+        AIMessageService aiService)
+    {
 
             // Get all enabled birthdays with their contacts
             var birthdays = await dbContext.Birthdays
@@ -78,7 +102,7 @@ public class BirthdayCheckerJob
                             );
 
                             // Generate birthday message
-                            var message = GenerateBirthdayMessage(birthday, contact);
+                            var message = await GenerateBirthdayMessageAsync(birthday, contact, aiService);
 
                             // Determine where to send the message (group or directly to contact)
                             var destinationNumber = string.IsNullOrWhiteSpace(birthday.SendToGroupId) 
@@ -149,6 +173,194 @@ public class BirthdayCheckerJob
                     }
                 }
             }
+        }
+
+        _logger.LogInformation("Completed checking main birthdays");
+    }
+
+    private async Task CheckAdditionalBirthdaysAsync(
+        ApplicationDbContext dbContext,
+        IWhatsAppService whatsAppService,
+        AIMessageService aiService)
+    {
+        // Get all enabled additional birthdays with their contacts
+        var additionalBirthdays = await dbContext.AdditionalBirthdays
+            .Include(ab => ab.Contact)
+            .ThenInclude(c => c.User)
+            .Where(ab => ab.IsEnabled)
+            .ToListAsync();
+
+        _logger.LogInformation("Found {Count} enabled additional birthdays to check", additionalBirthdays.Count);
+
+        foreach (var additionalBirthday in additionalBirthdays)
+        {
+            try
+            {
+                var contact = additionalBirthday.Contact;
+                var userId = contact.UserId;
+
+                // Check if it's time to send message
+                if (additionalBirthday.IsTimeToSendMessage(additionalBirthday.TimeZoneId, additionalBirthday.MessageHour))
+                {
+                    _logger.LogInformation(
+                        "It's {Name}'s birthday (Additional)! Sending message to {DestinationType} (User: {UserId})",
+                        additionalBirthday.Name,
+                        additionalBirthday.SendTo,
+                        userId
+                    );
+
+                    // Generate message
+                    var message = await GenerateAdditionalBirthdayMessageAsync(additionalBirthday, contact, aiService);
+
+                    // Determine where to send
+                    var destinationNumber = additionalBirthday.SendTo == "Contact" 
+                        ? contact.PhoneNumber 
+                        : additionalBirthday.SendToGroupId;
+
+                    if (string.IsNullOrEmpty(destinationNumber))
+                    {
+                        _logger.LogWarning("No destination number for additional birthday {Name}", additionalBirthday.Name);
+                        continue;
+                    }
+
+                    // Send via WhatsApp
+                    var success = await SendWhatsAppMessage(
+                        whatsAppService,
+                        userId,
+                        destinationNumber,
+                        message,
+                        additionalBirthday.GifUrl
+                    );
+
+                    if (success)
+                    {
+                        // Log in database
+                        var messageLog = new Message
+                        {
+                            UserId = userId,
+                            ContactId = contact.Id,
+                            Content = message,
+                            SentAt = DateTime.UtcNow,
+                            Status = MessageStatus.Sent,
+                            IsBirthdayMessage = true
+                        };
+
+                        dbContext.Messages.Add(messageLog);
+                        await dbContext.SaveChangesAsync();
+
+                        _logger.LogInformation(
+                            "Successfully sent additional birthday message for {Name} (Contact: {ContactName})",
+                            additionalBirthday.Name,
+                            contact.Name
+                        );
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error processing additional birthday {Id} for contact {ContactId}",
+                    additionalBirthday.Id,
+                    additionalBirthday.ContactId
+                );
+            }
+        }
+
+        _logger.LogInformation("Completed checking additional birthdays");
+    }
+
+    private async Task CheckCustomEventsAsync(
+        ApplicationDbContext dbContext,
+        IWhatsAppService whatsAppService,
+        AIMessageService aiService)
+    {
+        // Get all enabled custom events with their contacts
+        var customEvents = await dbContext.CustomEvents
+            .Include(ce => ce.Contact)
+            .ThenInclude(c => c.User)
+            .Where(ce => ce.IsEnabled)
+            .ToListAsync();
+
+        _logger.LogInformation("Found {Count} enabled custom events to check", customEvents.Count);
+
+        foreach (var customEvent in customEvents)
+        {
+            try
+            {
+                var contact = customEvent.Contact;
+                var userId = contact.UserId;
+
+                // Check if it's time to send message
+                if (customEvent.IsTimeToSendMessage(customEvent.TimeZoneId, customEvent.MessageHour))
+                {
+                    _logger.LogInformation(
+                        "It's time for custom event '{EventName}' for {ContactName} (User: {UserId})",
+                        customEvent.EventName,
+                        contact.Name,
+                        userId
+                    );
+
+                    // Generate message
+                    var message = await GenerateCustomEventMessageAsync(customEvent, contact, aiService);
+
+                    // Determine where to send
+                    var destinationNumber = customEvent.GroupId.HasValue && customEvent.GroupId > 0
+                        ? (await dbContext.Contacts.FindAsync(customEvent.GroupId.Value))?.PhoneNumber
+                        : contact.PhoneNumber;
+
+                    if (string.IsNullOrEmpty(destinationNumber))
+                    {
+                        _logger.LogWarning("No destination number for custom event {EventName}", customEvent.EventName);
+                        continue;
+                    }
+
+                    // Send via WhatsApp
+                    var success = await SendWhatsAppMessage(
+                        whatsAppService,
+                        userId,
+                        destinationNumber,
+                        message,
+                        customEvent.GifUrl
+                    );
+
+                    if (success)
+                    {
+                        // Log in database
+                        var messageLog = new Message
+                        {
+                            UserId = userId,
+                            ContactId = contact.Id,
+                            Content = message,
+                            SentAt = DateTime.UtcNow,
+                            Status = MessageStatus.Sent,
+                            IsBirthdayMessage = false // Custom event, not a birthday
+                        };
+
+                        dbContext.Messages.Add(messageLog);
+                        await dbContext.SaveChangesAsync();
+
+                        _logger.LogInformation(
+                            "Successfully sent custom event message '{EventName}' to {ContactName}",
+                            customEvent.EventName,
+                            contact.Name
+                        );
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error processing custom event {Id} for contact {ContactId}",
+                    customEvent.Id,
+                    customEvent.ContactId
+                );
+            }
+        }
+
+        _logger.LogInformation("Completed checking custom events");
+    }
 
             _logger.LogInformation("Birthday check job completed at {Time}", DateTime.UtcNow);
         }
@@ -158,7 +370,7 @@ public class BirthdayCheckerJob
         }
     }
 
-    private string GenerateBirthdayMessage(Birthday birthday, Contact contact)
+    private async Task<string> GenerateBirthdayMessageAsync(Birthday birthday, Contact contact, AIMessageService aiService)
     {
         // Use DisplayName if set, otherwise fall back to first name
         var displayName = !string.IsNullOrWhiteSpace(contact.DisplayName) 
@@ -181,7 +393,31 @@ public class BirthdayCheckerJob
             return customMessage;
         }
 
-        // Default message template
+        // Try to generate AI message if no custom message is set
+        try
+        {
+            _logger.LogInformation("Generating AI birthday message for {Name}", contact.Name);
+            
+            var aiMessage = await aiService.GenerateMessageAsync(
+                displayName,
+                "birthday",
+                contact.Notes
+            );
+            
+            if (!string.IsNullOrWhiteSpace(aiMessage))
+            {
+                _logger.LogInformation("Successfully generated AI message for {Name}", contact.Name);
+                return aiMessage;
+            }
+            
+            _logger.LogWarning("AI service returned empty message for {Name}, using default", contact.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate AI message for {Name}, using default", contact.Name);
+        }
+
+        // Fallback to default message template if AI fails
         var age = birthday.CalculateAge();
 
         if (age.HasValue)
