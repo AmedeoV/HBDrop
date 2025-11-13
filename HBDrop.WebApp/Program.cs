@@ -95,6 +95,7 @@ builder.Services.AddHttpContextAccessor(); // Required for getting current user 
 builder.Services.AddScoped<SessionEncryptionService>();
 builder.Services.AddHttpClient<IWhatsAppService, BaileysWhatsAppService>();
 builder.Services.AddHttpClient<IGifSearchService, GiphySearchService>();
+builder.Services.AddHttpClient<AIMessageService>();
 builder.Services.AddTransient<IEmailSender, EmailSender>();
 builder.Services.AddScoped<BirthdayCheckerJob>();
 builder.Services.AddScoped<CalendarImportService>();

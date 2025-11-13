@@ -15,6 +15,7 @@
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
 @inject RegionalEventsService RegionalEventsService
+@inject AIMessageService AIMessageService
 
 <PageTitle>Edit Contact - HBDrop</PageTitle>
 
@@ -148,7 +149,21 @@
                             <h5 class="mb-3">📝 Message Settings</h5>
 
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Custom Birthday Message <small class="text-muted">(optional)</small></label>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label fw-bold mb-0">Custom Birthday Message <small class="text-muted">(optional)</small></label>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="GenerateAIMessage" disabled="@isGeneratingMessage">
+                                        @if (isGeneratingMessage)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                            <span>Generating...</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-stars"></i>
+                                            <span>Generate with AI</span>
+                                        }
+                                    </button>
+                                </div>
                                 <InputTextArea class="form-control" @bind-Value="contactModel.CustomMessage" rows="3" 
                                                placeholder="Leave empty to use your default message. You can use {name} as a placeholder." />
                                 <div class="form-text">
@@ -844,6 +859,7 @@
     private int userDefaultHour = 9;
     private bool isSaving = false;
     private bool isLoading = true;
+    private bool isGeneratingMessage = false;
     private string errorMessage = "";
     private List<Contact> availableGroups = new();
     private List<Contact> filteredGroups = new();
@@ -1542,6 +1558,42 @@
     private void Cancel()
     {
         Navigation.NavigateTo("/contacts");
+    }
+
+    private async Task GenerateAIMessage()
+    {
+        if (isGeneratingMessage) return;
+
+        try
+        {
+            isGeneratingMessage = true;
+            StateHasChanged();
+
+            // Get contact display name or first name
+            var displayName = !string.IsNullOrWhiteSpace(contactModel.DisplayName) 
+                ? contactModel.DisplayName 
+                : contactModel.Name.Split(' ').FirstOrDefault() ?? contactModel.Name;
+
+            // Get notes from contact if available
+            var notes = contact?.Notes;
+
+            // Generate message
+            var generatedMessage = await AIMessageService.GenerateMessageAsync(
+                displayName,
+                "birthday",
+                notes);
+
+            contactModel.CustomMessage = generatedMessage;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to generate AI message: {ex.Message}";
+        }
+        finally
+        {
+            isGeneratingMessage = false;
+            StateHasChanged();
+        }
     }
 
     private void AddAdditionalBirthday()
