@@ -10,6 +10,11 @@
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-3">
+                    <!-- Mobile Menu Toggle -->
+                    <button class="mobile-menu-toggle d-md-none" @onclick="ToggleMobileMenu" type="button">
+                        <span class="hamburger-icon">☰</span>
+                    </button>
+                    
                     <a href="/dashboard" class="navbar-brand">
                         <span style="font-size: 1.5rem;">🎂</span>
                         <span class="fw-bold">HBDrop</span>
@@ -21,7 +26,7 @@
                         <a href="/whatsapp/connect" class="nav-link">WhatsApp</a>
                     </div>
                 </div>
-                <div>
+                <div class="d-none d-md-flex">
                     <AuthorizeView>
                         <Authorized>
                             <div class="d-flex align-items-center gap-3">
@@ -39,9 +44,61 @@
                         </NotAuthorized>
                     </AuthorizeView>
                 </div>
+                <!-- Mobile Menu Icon -->
+                <button class="mobile-settings-toggle d-md-none" @onclick="ToggleMobileMenu" type="button">
+                    <span style="font-size: 1.25rem;">⚙️</span>
+                </button>
             </div>
         </div>
     </nav>
+
+    <!-- Mobile Menu Overlay -->
+    <div class="mobile-menu-overlay @(showMobileMenu ? "show" : "")" @onclick="ToggleMobileMenu"></div>
+    
+    <!-- Mobile Menu -->
+    <div class="mobile-menu @(showMobileMenu ? "show" : "")">
+        <div class="mobile-menu-header">
+            <h5 class="mb-0">Menu</h5>
+            <button class="mobile-menu-close" @onclick="ToggleMobileMenu" type="button">✕</button>
+        </div>
+        <div class="mobile-menu-body">
+            <a href="/dashboard" class="mobile-menu-link" @onclick="ToggleMobileMenu">
+                <span class="mobile-menu-icon">📊</span> Dashboard
+            </a>
+            <a href="/contacts" class="mobile-menu-link" @onclick="ToggleMobileMenu">
+                <span class="mobile-menu-icon">👥</span> Contacts
+            </a>
+            <a href="/messages" class="mobile-menu-link" @onclick="ToggleMobileMenu">
+                <span class="mobile-menu-icon">💬</span> Messages
+            </a>
+            <a href="/whatsapp/connect" class="mobile-menu-link" @onclick="ToggleMobileMenu">
+                <span class="mobile-menu-icon">📱</span> WhatsApp
+            </a>
+            <hr class="my-3" />
+            <AuthorizeView>
+                <Authorized>
+                    <AuthorizeView Roles="Admin" Context="adminLink">
+                        <Authorized>
+                            <a href="/admin" class="mobile-menu-link" @onclick="ToggleMobileMenu">
+                                <span class="mobile-menu-icon">🛡️</span> Admin
+                            </a>
+                        </Authorized>
+                    </AuthorizeView>
+                    <a href="/settings" class="mobile-menu-link" @onclick="ToggleMobileMenu">
+                        <span class="mobile-menu-icon">⚙️</span> Settings
+                    </a>
+                    <button type="button" class="mobile-menu-link text-danger" @onclick="HandleLogoutMobile" style="border: none; background: none; width: 100%; text-align: left;">
+                        <span class="mobile-menu-icon">🚪</span> Logout
+                    </button>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="/Identity/Account/Login" class="mobile-menu-link" @onclick="ToggleMobileMenu">
+                        <span class="mobile-menu-icon">🔐</span> Sign In
+                    </a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="dashboard-main">
@@ -59,8 +116,21 @@
 </div>
 
 @code {
+    private bool showMobileMenu = false;
+
+    private void ToggleMobileMenu()
+    {
+        showMobileMenu = !showMobileMenu;
+    }
+
     private void HandleLogout()
     {
         NavigationManager.NavigateTo("/Identity/Account/Logout", forceLoad: true);
+    }
+
+    private void HandleLogoutMobile()
+    {
+        showMobileMenu = false;
+        HandleLogout();
     }
 }

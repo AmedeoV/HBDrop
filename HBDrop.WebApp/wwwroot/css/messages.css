@@ -342,4 +342,87 @@
     .messages-filters .row {
         gap: 10px;
     }
+
+    /* Better message list on mobile */
+    .message-item {
+        padding: 1rem;
+    }
+
+    /* Stack header actions */
+    .header-actions {
+        width: 100%;
+    }
+
+    .header-actions .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .messages-container {
+        padding: 0.5rem;
+    }
+
+    .messages-header {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+    }
+
+    .page-title {
+        font-size: 1.25rem;
+    }
+
+    .page-title i {
+        font-size: 1.25rem;
+    }
+
+    /* Stats boxes */
+    .stat-box {
+        padding: 12px;
+    }
+
+    .stat-icon {
+        font-size: 1.75rem;
+        width: 45px;
+        height: 45px;
+    }
+
+    .stat-info h4 {
+        font-size: 1.25rem;
+    }
+
+    .stat-info p {
+        font-size: 0.8rem;
+    }
+
+    /* Filters */
+    .messages-filters {
+        padding: 1rem;
+    }
+
+    .messages-filters .form-select,
+    .messages-filters .form-control {
+        font-size: 0.875rem;
+    }
+
+    /* Message cards */
+    .message-item {
+        padding: 0.875rem;
+        border-radius: 8px;
+    }
+
+    .message-text {
+        font-size: 0.875rem;
+    }
+
+    .message-dates small {
+        font-size: 0.75rem;
+    }
+
+    /* Badge sizes */
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
 }
