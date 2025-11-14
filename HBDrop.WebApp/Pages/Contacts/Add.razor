@@ -135,15 +135,6 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-bold">Birthday GIF <small class="text-muted">(optional)</small></label>
-                            <div class="form-text mb-2">
-                                <i class="bi bi-image"></i> Search and select a GIF to send with the birthday message
-                            </div>
-                            <GifSearchComponent @bind-SelectedGifUrl="contactModel.GifUrl" />
-                            <ValidationMessage For="@(() => contactModel.GifUrl)" />
-                        </div>
-
-                        <div class="mb-4">
                             <label class="form-label fw-bold">Send Birthday Message To <small class="text-muted">(optional)</small></label>
                             
                             @if (!showGroupSearch)
@@ -334,12 +325,6 @@
                                                 <span>Generate with AI</span>
                                             }
                                         </button>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label fw-bold">Birthday GIF <small class="text-muted">(optional)</small></label>
-                                        <div class="form-text mb-2">Search and select a GIF for this birthday</div>
-                                        <GifSearchComponent @bind-SelectedGifUrl="additionalBirthday.GifUrl" />
                                     </div>
 
                                     <div class="mb-3">
@@ -643,12 +628,6 @@
                                     </div>
 
                                     <div class="mb-3">
-                                        <label class="form-label fw-bold">Event GIF <small class="text-muted">(optional)</small></label>
-                                        <div class="form-text mb-2">Search and select a GIF for this event</div>
-                                        <GifSearchComponent @bind-SelectedGifUrl="customEvent.GifUrl" />
-                                    </div>
-
-                                    <div class="mb-3">
                                         <label class="form-label fw-bold">Send Message To</label>
                                         <select class="form-select" @bind="customEvent.SendTo" @bind:after="() => OnEventSendToChanged(customEvent)">
                                             <option value="Contact">Send to this contact (@contactModel.Name)</option>
@@ -881,10 +860,6 @@
         [StringLength(500, ErrorMessage = "Custom message cannot be longer than 500 characters")]
         public string? CustomMessage { get; set; }
 
-        [StringLength(1000, ErrorMessage = "GIF URL cannot be longer than 1000 characters")]
-        [Url(ErrorMessage = "Please enter a valid URL")]
-        public string? GifUrl { get; set; }
-
         [StringLength(100, ErrorMessage = "Group ID cannot be longer than 100 characters")]
         public string? SendToGroupId { get; set; }
 
@@ -932,7 +907,6 @@
         public int? BirthYear { get; set; }
         public string? Notes { get; set; }
         public string? CustomMessage { get; set; }
-        public string? GifUrl { get; set; }
         public string SendTo { get; set; } = "Contact";
         public int? SendToGroupId { get; set; }
         public string? TimeZoneId { get; set; }
@@ -955,7 +929,6 @@
         public int? EventYear { get; set; }
         public string? Notes { get; set; }
         public string? CustomMessage { get; set; }
-        public string? GifUrl { get; set; }
         public string SendTo { get; set; } = "Contact";
         public int? SendToGroupId { get; set; }
         public string? TimeZoneId { get; set; }
@@ -1084,9 +1057,6 @@
                     CustomMessage = string.IsNullOrWhiteSpace(contactModel.CustomMessage) 
                         ? null 
                         : contactModel.CustomMessage.Trim(),
-                    GifUrl = string.IsNullOrWhiteSpace(contactModel.GifUrl) 
-                        ? null 
-                        : contactModel.GifUrl.Trim(),
                     SendToGroupId = string.IsNullOrWhiteSpace(contactModel.SendToGroupId) 
                         ? null 
                         : contactModel.SendToGroupId.Trim(),
@@ -1132,9 +1102,6 @@
                         CustomMessage = string.IsNullOrWhiteSpace(additionalBirthday.CustomMessage) 
                             ? null 
                             : additionalBirthday.CustomMessage.Trim(),
-                        GifUrl = string.IsNullOrWhiteSpace(additionalBirthday.GifUrl) 
-                            ? null 
-                            : additionalBirthday.GifUrl.Trim(),
                         SendTo = additionalBirthday.SendTo,
                         SendToGroupId = additionalBirthday.SendToGroupId,
                         TimeZoneId = string.IsNullOrWhiteSpace(additionalBirthday.TimeZoneId) ? timezoneToUse : additionalBirthday.TimeZoneId,
@@ -1222,9 +1189,6 @@
                         CustomMessage = string.IsNullOrWhiteSpace(customEvent.CustomMessage) 
                             ? null 
                             : customEvent.CustomMessage.Trim(),
-                        GifUrl = string.IsNullOrWhiteSpace(customEvent.GifUrl) 
-                            ? null 
-                            : customEvent.GifUrl.Trim(),
                         GroupId = customEvent.SendTo == "Group" ? customEvent.SendToGroupId : null,
                         TimeZoneId = string.IsNullOrWhiteSpace(customEvent.TimeZoneId) ? timezoneToUse : customEvent.TimeZoneId,
                         MessageHour = customEvent.MessageHour ?? hourToUse,

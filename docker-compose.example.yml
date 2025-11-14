@@ -62,7 +62,6 @@ services:
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=hbdrop;Username=hbdrop_user;Password=${POSTGRES_PASSWORD}
       - Baileys__ApiUrl=http://baileys:3000
       - Encryption__MasterKey=${ENCRYPTION_MASTER_KEY}
-      - Giphy__ApiKey=${GIPHY_API_KEY}
     networks:
       - hbdrop-network
     restart: unless-stopped

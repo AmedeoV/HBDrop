@@ -86,11 +86,14 @@
                         <a href="/messages" class="btn btn-outline-secondary">
                             <i class="bi bi-chat-dots"></i> Message History
                         </a>
-                        @if (isWhatsAppConnected)
+                        <button class="btn btn-outline-info" @onclick="ShowTestMessageModal" disabled="@(!isWhatsAppConnected)">
+                            <i class="bi bi-send"></i> Send Test Message
+                        </button>
+                        @if (!isWhatsAppConnected)
                         {
-                            <button class="btn btn-outline-info" @onclick="ShowTestMessageModal">
-                                <i class="bi bi-send"></i> Send Test Message
-                            </button>
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-info-circle"></i> Connect WhatsApp to send test messages
+                            </small>
                         }
                     </div>
                 </div>
@@ -101,8 +104,8 @@
     <!-- Test Message Modal -->
     @if (showTestModal)
     {
-        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-            <div class="modal-dialog">
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="CloseTestModal">
+            <div class="modal-dialog" @onclick:stopPropagation="true">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">📱 Send Test Message</h5>
@@ -697,7 +700,12 @@
         try
         {
             var destination = sendToGroup ? selectedTestGroup!.GroupId! : testPhoneNumber;
-            var success = await WhatsAppService.SendMessageAsync(destination, testMessage);
+            
+            // Debug logging
+            Console.WriteLine($"Sending test message to {destination}");
+            Console.WriteLine($"Message: {testMessage}");
+            
+            var success = await WhatsAppService.SendMessageAsync(destination, testMessage, null);
             
             if (success)
             {
