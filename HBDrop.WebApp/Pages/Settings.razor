@@ -3,13 +3,16 @@
 @using Microsoft.EntityFrameworkCore
 @using HBDrop.WebApp.Models
 @using HBDrop.WebApp.Data
+@using HBDrop.WebApp.Services
 @* @attribute [Authorize] - Temporarily disabled to test manual redirect *@
 @layout DashboardLayout
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
 @inject NavigationManager Navigation
 @inject ApplicationDbContext DbContext
 @inject IJSRuntime JSRuntime
+@inject AccountDeletionService AccountDeletionService
 
 <PageTitle>Settings - HBDrop</PageTitle>
 
@@ -103,7 +106,7 @@
             <!-- Current Settings Preview -->
             @if (currentUser != null && !string.IsNullOrEmpty(currentUser.DefaultTimeZoneId))
             {
-                <div class="card shadow-sm">
+                <div class="card shadow-sm mb-4">
                     <div class="card-body">
                         <h6 class="card-title">📍 Current Settings</h6>
                         <ul class="list-unstyled mb-0">
@@ -114,6 +117,54 @@
                     </div>
                 </div>
             }
+
+            <!-- Danger Zone -->
+            <div class="card shadow-sm border-danger">
+                <div class="card-body p-4">
+                    <h5 class="card-title text-danger mb-3">⚠️ Danger Zone</h5>
+                    <p class="text-muted mb-3">
+                        Once you delete your account, there is no going back. This action cannot be undone.
+                    </p>
+                    
+                    @if (dataSummary != null)
+                    {
+                        <div class="alert alert-warning">
+                            <strong>🗑️ The following data will be permanently deleted:</strong>
+                            <ul class="mb-0 mt-2">
+                                @if (dataSummary.ContactsCount > 0)
+                                {
+                                    <li><strong>@dataSummary.ContactsCount</strong> contact(s)</li>
+                                }
+                                @if (dataSummary.BirthdaysCount > 0)
+                                {
+                                    <li><strong>@dataSummary.BirthdaysCount</strong> birthday(s)</li>
+                                }
+                                @if (dataSummary.AdditionalBirthdaysCount > 0)
+                                {
+                                    <li><strong>@dataSummary.AdditionalBirthdaysCount</strong> additional birthday(s)</li>
+                                }
+                                @if (dataSummary.CustomEventsCount > 0)
+                                {
+                                    <li><strong>@dataSummary.CustomEventsCount</strong> custom event(s)</li>
+                                }
+                                @if (dataSummary.MessagesCount > 0)
+                                {
+                                    <li><strong>@dataSummary.MessagesCount</strong> message(s)</li>
+                                }
+                                @if (dataSummary.HasWhatsAppSession)
+                                {
+                                    <li>WhatsApp connection</li>
+                                }
+                                <li>Your account and all settings</li>
+                            </ul>
+                        </div>
+                    }
+
+                    <button type="button" class="btn btn-danger" @onclick="ShowDeleteConfirmation">
+                        🗑️ Delete My Account and All Data
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -159,6 +210,78 @@
     </div>
 }
 
+<!-- Modal for confirming account deletion -->
+@if (showDeleteConfirmationModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-danger">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">⚠️ Confirm Account Deletion</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelDeleteAccount"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <strong>⚠️ WARNING:</strong> This action is permanent and cannot be undone!
+                    </div>
+                    
+                    <p class="mb-3">
+                        All your data will be permanently deleted, including:
+                    </p>
+                    <ul class="mb-3">
+                        <li>All contacts and their information</li>
+                        <li>All birthdays and custom events</li>
+                        <li>All message history</li>
+                        <li>Your WhatsApp connection</li>
+                        <li>Your account credentials</li>
+                    </ul>
+
+                    <p class="fw-bold mb-2">
+                        To confirm, please type your email address: <code>@currentUser?.Email</code>
+                    </p>
+                    
+                    <input type="text" 
+                           class="form-control @(emailConfirmationError ? "is-invalid" : "")" 
+                           placeholder="Enter your email address"
+                           @bind="emailConfirmation"
+                           @bind:event="oninput"
+                           @onkeyup="ClearEmailConfirmationError" />
+                    
+                    @if (emailConfirmationError)
+                    {
+                        <div class="invalid-feedback d-block">
+                            Email address doesn't match. Please try again.
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(deleteErrorMessage))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0">
+                            <strong>Error:</strong> @deleteErrorMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDeleteAccount" disabled="@isDeletingAccount">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDeleteAccount" disabled="@isDeletingAccount">
+                        @if (isDeletingAccount)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Deleting Account...</span>
+                        }
+                        else
+                        {
+                            <span>🗑️ Yes, Delete My Account</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private class SettingsModel
     {
@@ -182,6 +305,14 @@
     private int contactCount = 0;
     private string? oldTimeZoneId;
     private int oldMessageHour;
+    
+    // Account deletion fields
+    private bool showDeleteConfirmationModal = false;
+    private bool isDeletingAccount = false;
+    private string emailConfirmation = "";
+    private bool emailConfirmationError = false;
+    private string deleteErrorMessage = "";
+    private AccountDataSummary? dataSummary;
 
     private List<TimeZoneOption> commonTimeZones = new()
     {
@@ -237,6 +368,9 @@
             contactCount = await DbContext.Contacts
                 .Where(c => c.UserId == currentUser.Id)
                 .CountAsync();
+            
+            // Load data summary for deletion preview
+            dataSummary = await AccountDeletionService.GetAccountDataSummaryAsync(currentUser.Id);
         }
     }
 
@@ -424,6 +558,67 @@
         catch
         {
             return "Invalid timezone";
+        }
+    }
+
+    // Account deletion methods
+    private void ShowDeleteConfirmation()
+    {
+        emailConfirmation = "";
+        emailConfirmationError = false;
+        deleteErrorMessage = "";
+        showDeleteConfirmationModal = true;
+    }
+
+    private void CancelDeleteAccount()
+    {
+        showDeleteConfirmationModal = false;
+        emailConfirmation = "";
+        emailConfirmationError = false;
+        deleteErrorMessage = "";
+    }
+
+    private void ClearEmailConfirmationError()
+    {
+        emailConfirmationError = false;
+    }
+
+    private async Task ConfirmDeleteAccount()
+    {
+        if (currentUser == null) return;
+
+        // Validate email confirmation
+        if (emailConfirmation?.Trim().ToLowerInvariant() != currentUser.Email?.ToLowerInvariant())
+        {
+            emailConfirmationError = true;
+            return;
+        }
+
+        isDeletingAccount = true;
+        deleteErrorMessage = "";
+
+        try
+        {
+            var result = await AccountDeletionService.DeleteAccountAsync(currentUser.Id);
+
+            if (result.Success)
+            {
+                // Sign out and redirect to home page
+                await SignInManager.SignOutAsync();
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                deleteErrorMessage = result.ErrorMessage ?? "An unknown error occurred.";
+            }
+        }
+        catch (Exception ex)
+        {
+            deleteErrorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isDeletingAccount = false;
         }
     }
 }

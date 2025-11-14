@@ -98,6 +98,7 @@ builder.Services.AddHttpClient<AIMessageService>();
 builder.Services.AddTransient<IEmailSender, EmailSender>();
 builder.Services.AddScoped<BirthdayCheckerJob>();
 builder.Services.AddScoped<CalendarImportService>();
+builder.Services.AddScoped<AccountDeletionService>();
 builder.Services.AddSingleton<RegionalEventsService>();
 
 // Add health checks

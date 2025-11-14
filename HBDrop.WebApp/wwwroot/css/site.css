@@ -66,3 +66,38 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* Settings page styles */
+.settings-container .card.border-danger {
+    border-width: 2px !important;
+}
+
+.settings-container .card.border-danger .card-title.text-danger {
+    font-weight: 600;
+}
+
+.settings-container .btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.settings-container .btn-danger:focus {
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.5);
+}
+
+/* Account deletion modal styles */
+.modal-content.border-danger {
+    border-width: 2px !important;
+}
+
+.modal-header.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.modal-content.border-danger .modal-body code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #dc3545;
+    font-weight: 600;
+}
