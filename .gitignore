@@ -10,8 +10,7 @@
 !**/appsettings.example.json
 !**/appsettings.Development.json
 
-# Docker Compose with sensitive data
-docker-compose.yml
+# Docker Compose with sensitive data (dev version only - production uses env vars)
 docker-compose.dev.yml
 
 # Cloudflare Tunnel configuration
