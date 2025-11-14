@@ -12,7 +12,8 @@ app.use(express.json());
 const userSessions = new Map();
 
 const AUTH_FOLDER_BASE = './auth_info';
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 10; // Increased from 3 to handle temporary network issues
+const INITIAL_RETRY_DELAY = 2000; // Start with 2 seconds
 
 const logger = P({ level: 'silent' });
 
@@ -165,8 +166,10 @@ async function connectToWhatsApp(userId, usePairingCode = false, phoneNumber = n
                     sessionData.connectionAttempts++;
                     
                     if (sessionData.connectionAttempts <= MAX_RETRIES) {
-                        console.log(`[${userId}] 🔄 Reconnecting... (Attempt ${sessionData.connectionAttempts}/${MAX_RETRIES})`);
-                        setTimeout(() => connectToWhatsApp(userId), 2000);
+                        // Exponential backoff: 2s, 4s, 8s, 16s, 30s (capped), 30s, ...
+                        const delay = Math.min(INITIAL_RETRY_DELAY * Math.pow(2, sessionData.connectionAttempts - 1), 30000);
+                        console.log(`[${userId}] 🔄 Reconnecting in ${delay/1000}s... (Attempt ${sessionData.connectionAttempts}/${MAX_RETRIES})`);
+                        setTimeout(() => connectToWhatsApp(userId), delay);
                     } else {
                         console.log(`[${userId}] ❌ Max reconnection attempts reached`);
                         userSessions.delete(userId);
@@ -527,12 +530,76 @@ app.post('/logout/:userId', async (req, res) => {
     }
 });
 
+// Restore existing sessions on startup
+async function restoreExistingSessions() {
+    try {
+        console.log('\n🔄 Checking for existing WhatsApp sessions to restore...');
+        
+        if (!fs.existsSync(AUTH_FOLDER_BASE)) {
+            console.log('   No auth folder found - starting fresh');
+            return;
+        }
+        
+        const userFolders = fs.readdirSync(AUTH_FOLDER_BASE);
+        const validSessions = [];
+        
+        for (const userId of userFolders) {
+            const authFolder = path.join(AUTH_FOLDER_BASE, userId);
+            const credsPath = path.join(authFolder, 'creds.json');
+            
+            // Check if this user has valid credentials
+            if (fs.existsSync(credsPath)) {
+                try {
+                    const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+                    // Check if creds contain required fields
+                    if (creds.me && creds.me.id) {
+                        validSessions.push(userId);
+                        console.log(`   Found session for user: ${userId}`);
+                    }
+                } catch (err) {
+                    console.log(`   Skipping ${userId} - invalid credentials`);
+                }
+            }
+        }
+        
+        if (validSessions.length === 0) {
+            console.log('   No valid sessions to restore');
+            return;
+        }
+        
+        console.log(`\n✅ Restoring ${validSessions.length} session(s)...\n`);
+        
+        // Restore sessions with a delay between each to avoid overwhelming WhatsApp servers
+        for (let i = 0; i < validSessions.length; i++) {
+            const userId = validSessions[i];
+            try {
+                console.log(`[${userId}] 🔄 Restoring session (${i + 1}/${validSessions.length})...`);
+                await connectToWhatsApp(userId);
+                
+                // Wait a bit between connections to avoid rate limiting
+                if (i < validSessions.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            } catch (err) {
+                console.error(`[${userId}] ❌ Failed to restore session:`, err.message);
+            }
+        }
+        
+        console.log('\n✅ Session restoration complete\n');
+    } catch (err) {
+        console.error('Error during session restoration:', err);
+    }
+}
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`\n ================================================`);
     console.log(`   Baileys WhatsApp Multi-User Service`);
     console.log(`   Running on port ${PORT}`);
     console.log(`   Supporting multiple concurrent user sessions`);
     console.log(`   Health check: http://localhost:${PORT}/health`);
     console.log(`================================================\n`);
+    
+    // Restore existing sessions after server starts
+    await restoreExistingSessions();
 });
