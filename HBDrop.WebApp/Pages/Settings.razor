@@ -596,6 +596,7 @@
 
         isDeletingAccount = true;
         deleteErrorMessage = "";
+        StateHasChanged(); // Force UI update
 
         try
         {
@@ -603,22 +604,35 @@
 
             if (result.Success)
             {
-                // Sign out and redirect to home page
-                await SignInManager.SignOutAsync();
+                // Account deleted successfully
+                // Force sign out and redirect (don't await to avoid hanging)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await SignInManager.SignOutAsync();
+                    }
+                    catch
+                    {
+                        // Ignore sign out errors - user is already deleted
+                    }
+                });
+                
+                // Immediate redirect
                 Navigation.NavigateTo("/", forceLoad: true);
             }
             else
             {
                 deleteErrorMessage = result.ErrorMessage ?? "An unknown error occurred.";
+                isDeletingAccount = false;
+                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
             deleteErrorMessage = $"An error occurred: {ex.Message}";
-        }
-        finally
-        {
             isDeletingAccount = false;
+            StateHasChanged();
         }
     }
 }

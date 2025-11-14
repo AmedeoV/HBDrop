@@ -12,18 +12,15 @@ public class AccountDeletionService
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly ILogger<AccountDeletionService> _logger;
 
     public AccountDeletionService(
         ApplicationDbContext context,
         UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager,
         ILogger<AccountDeletionService> logger)
     {
         _context = context;
         _userManager = userManager;
-        _signInManager = signInManager;
         _logger = logger;
     }
 
@@ -128,10 +125,8 @@ public class AccountDeletionService
                 };
             }
 
-            // 6. Sign out the user
-            await _signInManager.SignOutAsync();
-
-            // 7. Commit the transaction
+            // 6. Commit the transaction
+            // Note: SignOut is handled by the calling page to avoid "Headers are read-only" errors
             await transaction.CommitAsync();
 
             _logger.LogInformation("Successfully deleted account for user {UserId} ({Email})", userId, user.Email);

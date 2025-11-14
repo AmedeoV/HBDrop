@@ -175,25 +175,10 @@ async function connectToWhatsApp(userId, usePairingCode = false, phoneNumber = n
                         userSessions.delete(userId);
                     }
                 } else {
-                    console.log(`[${userId}] 🚪 Logged out - cleaning up session`);
+                    console.log(`[${userId}] 🚪 Connection closed by WhatsApp (logged out) - preserving auth files for reconnection`);
+                    // Only remove from memory, keep auth files for reconnection
                     userSessions.delete(userId);
-                    
-                    // Delete auth files after logout
-                    setTimeout(() => {
-                        try {
-                            const files = fs.readdirSync(authFolder);
-                            files.forEach(file => {
-                                try {
-                                    fs.unlinkSync(path.join(authFolder, file));
-                                } catch (err) {
-                                    console.error(`[${userId}] Error deleting file ${file}:`, err);
-                                }
-                            });
-                            console.log(`[${userId}] 🗑️  Auth files deleted`);
-                        } catch (err) {
-                            console.error(`[${userId}] Error cleaning auth folder:`, err);
-                        }
-                    }, 1000);
+                    // Auth files are preserved - user can reconnect without re-scanning QR
                 }
             } else if (connection === 'open') {
                 console.log(`[${userId}] ✅ WhatsApp connected successfully!`);
@@ -356,6 +341,25 @@ app.get('/status/:userId', async (req, res) => {
         const session = userSessions.get(userId);
         
         if (!session) {
+            // Check if auth files exist - if so, try to reconnect automatically
+            const authFolder = getUserAuthFolder(userId);
+            const credsPath = path.join(authFolder, 'creds.json');
+            
+            if (fs.existsSync(credsPath)) {
+                console.log(`[${userId}] 🔄 Auth files found but no active session - reconnecting...`);
+                
+                // Start reconnection in background
+                connectToWhatsApp(userId).catch(err => {
+                    console.error(`[${userId}] Error reconnecting:`, err);
+                });
+                
+                return res.json({ 
+                    isConnected: false,
+                    phoneNumber: null,
+                    message: 'Reconnecting to WhatsApp...' 
+                });
+            }
+            
             console.log(`[${userId}] ℹ️  Status check: No session found`);
             return res.json({ 
                 isConnected: false,
