@@ -24,7 +24,7 @@
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="Thought.vCards" Version="1.0.9" />
-    <PackageReference Include="Ical.Net" Version="4.2.0" />
+    <PackageReference Include="Ical.Net" Version="4.3.1" />
     <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <PackageReference Include="AspNetCore.HealthChecks.Npgsql" Version="9.0.0" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
